@@ -15,6 +15,7 @@ D.Rules = Rules
 local RARE = 3      -- Enum.ItemQuality.Rare
 local POOR = 0
 local CLASS_WEAPON, CLASS_TRADE, CLASS_ARMOR, CLASS_RECIPE, CLASS_QUEST = 2, 7, 4, 9, 12
+Rules.CLASS_QUEST = CLASS_QUEST
 
 local HEARTHSTONE = 6948
 -- gathering and crafting tools: cheap, soulbound-looking, and a nuisance to lose
@@ -117,6 +118,17 @@ local function anotherCharacterUses(id)
       end
     end
   end
+end
+
+---True if a profession here, or with the rule on another character's, uses this item.
+function Rules.ProfessionUses(id)
+  if ourProfessionUses(id) then return true end
+  return D.db.rules.altKeep and anotherCharacterUses(id) ~= nil
+end
+
+---The hearthstone and profession tools: what every trip needs.
+function Rules.IsEveryday(id)
+  return id == HEARTHSTONE or TOOLS[id] ~= nil
 end
 
 ---Whether the character lists this item to carry or to stash.

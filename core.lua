@@ -128,7 +128,8 @@ end
 local DEFAULTS = {
   first = true,        -- the first-run presets haven't been answered
   tooltips = true,     -- the verdict and reason, in item tooltips
-  strip = true,        -- the strip beside the game's bags
+  pocket = true,       -- the sectioned bag window, instead of the game's bags
+  strip = true,        -- the strip beside the game's bags, when they're showing
   marks = true,        -- the small marks on bag slots
   buyCap = 10000,      -- copper a vendor visit may spend from the carry list (1g)
   mergeAt = 6,         -- merge stacks by itself at this many free slots or fewer
@@ -204,6 +205,7 @@ Core:On("ADDON_LOADED", D, function(_, name)
   D.db = DimensionDB
   D.db.rules = fill(D.db.rules or {}, RULES)
   D.db.itemMarks = D.db.itemMarks or {}  -- [itemId] = "junk" | "keep"
+  D.db.collapsed = D.db.collapsed or {}  -- [section key] = true
   D.db.chars = D.db.chars or {}
   D.db.probe = D.db.probe or {}
 end)
@@ -212,6 +214,7 @@ end)
 function D:Changed()
   Core:NextFrame(function()
     if D.Overlay then D.Overlay:Refresh() end
+    if D.Pocket then D.Pocket:Refresh() end
     if D.Window then D.Window:Refresh() end
     if D.Panels then D.Panels:Refresh() end
   end, "dimension.changed")
@@ -254,6 +257,9 @@ SlashCmdList["DIMENSION"] = function(msg)
     D:Toggle()
   elseif lower == "settings" or lower == "options" then
     D:OpenSettings()
+  elseif lower == "bags" then
+    D.Pocket:SetEnabled(not D.db.pocket)
+    D:Print(D.db.pocket and "Using Dimension's bag window." or "Using the game's own bags.")
   elseif lower == "tidy" then
     D.Tidy:Run()
   elseif lower == "room" then
@@ -261,7 +267,7 @@ SlashCmdList["DIMENSION"] = function(msg)
   elseif lower == "probe" or lower:match("^probe ") then
     D.Probe:Run(lower:match("^probe%s+(%S+)"))
   else
-    D:Print("/dim opens the window. Also: /dim tidy, /dim room, /dim settings, /dim probe [sell | move | sort]")
+    D:Print("/dim opens the window. Also: /dim bags, /dim tidy, /dim room, /dim settings, /dim probe [sell | move | sort]")
   end
 end
 

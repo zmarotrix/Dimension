@@ -34,6 +34,8 @@ local function containerFrames()
   return out
 end
 
+Overlay.ContainerFrames = containerFrames
+
 local function marksFor(button)
   local m = marks[button]
   if m then return m end
@@ -74,6 +76,8 @@ local function refreshButton(button)
   m.keep:SetShown(show == "keep")
   m.pin:SetShown(pinned and true or false)
 end
+
+Overlay.RefreshButton = refreshButton
 
 local function refreshFrame(frame)
   if not (frame.EnumerateValidItems and frame:IsShown()) then return end

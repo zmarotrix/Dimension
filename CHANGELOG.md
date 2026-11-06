@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0, 2026-11-06
+
+- **A bag window grouped by what things are for,** instead of the game's bags: Sells at the next vendor, For your quests, Your
+  professions use, Always with you, Consumables, Gear, Recipes, Other trade goods and Everything else. Nothing physically moves.
+  Sections collapse, a search dims what doesn't match, and `/dim bags` or a setting goes back to the game's bags.
+
 ## 0.9.0, 2026-11-06
 
 First build. It passes its harness but hasn't been played in the game yet.

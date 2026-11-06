@@ -23,8 +23,10 @@ Core:OnLogin(function()
   page:Hide()
   local list = UI.SettingsList(page)
 
-  list:Header("The game's bags")
-  list:Toggle("The strip beside the bags", "Free slots, what can go, and the Tidy and Make room buttons.",
+  list:Header("Bags")
+  list:Toggle("Use Dimension's bag window", "Everything grouped by what it's for, instead of the game's bags. Nothing moves. /dim bags switches too.",
+    function() return D.db.pocket end, function(on) D.Pocket:SetEnabled(on) end)
+  list:Toggle("The strip beside the game's bags", "When they're showing: free slots, what can go, and the Tidy and Make room buttons.",
     function() return D.db.strip end, function(on) D.db.strip = on D:Changed() end)
   list:Toggle("Small marks on bag slots", "A coin for what sells at the next vendor, a tick for your Keep marks, an arrow for pinned slots.",
     function() return D.db.marks end, function(on) D.db.marks = on D:Changed() end)
@@ -62,6 +64,7 @@ Core:OnLogin(function()
   -- Dimension's hot paths for /norg perf (wrapped only while measuring)
   local function perf(label, tbl, method) Core:RegisterPerf("Dimension: " .. label, tbl, method, "dimension") end
   perf("bag marks", D.Overlay, "Refresh")
+  perf("bag window", D.Pocket, "Refresh")
   perf("sell list", D.Rules, "SellList")
   perf("make room", D.Room, "List")
   perf("window refresh", D.Window, "Refresh")

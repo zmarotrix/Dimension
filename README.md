@@ -13,10 +13,14 @@
 > played in the game yet, so expect things to need fixing. `/dim probe` tests what your client allows.
 
 **Dimension looks after your bags, and can always say why it did something.** It sells what's safe, frees
-space when bags fill up, runs bank trips and keeps things in their places. It adds to the game's own bags
-rather than replacing them.
+space when bags fill up, runs bank trips and keeps things in their places. One bag window groups everything by what it's
+for, and `/dim bags` goes back to the game's own bags whenever you want.
 
 ## What it does
+
+### One window, grouped by what things are for
+Sells at the next vendor, For your quests, Your professions use, then the usual kinds of item. The first three come from your
+rules, your quest log and NorgannonDB. Nothing physically moves, so it's instant. Sections collapse and there's a search.
 
 ### Rules you can read
 Every item gets a verdict and a reason, on its tooltip: "Sells at the next vendor: Grey" or "Kept: Reward from
@@ -51,7 +55,7 @@ mid-sale can't make you drink the potion.
 
 ## Commands
 
-`/dim` opens the window. `/dim tidy`, `/dim room`, `/dim settings`, and `/dim probe [sell | move | sort]`.
+`/dim` opens the settings window, and your bag key opens your bags. `/dim bags`, `/dim tidy`, `/dim room`, `/dim settings`, and `/dim probe [sell | move | sort]`.
 Key bindings for opening, marking, pinning and tidying are in the game's Key Bindings, under AddOns.
 
 ## Needs
