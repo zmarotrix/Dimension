@@ -8,8 +8,11 @@
 -- back to that, and its own comment warns about tainting it). And nothing is ever written onto a button:
 -- what we track about one lives in our own tables.
 --
--- The layout freezes during combat, while something is being dragged and while the mover works, so
--- a slot never jumps under the mouse. Icons and counts still update, and it catches up afterwards.
+-- Once open, the layout freezes during combat, while something is being dragged and while the mover
+-- works, so a slot never jumps under the mouse. Icons and counts still update, and it catches up
+-- afterwards. Opening always lays it out first, because a frozen layout is only for a window already
+-- on screen. The template has no `protected` attribute in the client's XML; if a button turns out to
+-- be locked in combat anyway, the layout from before the fight is used, and with none the game's bags stay.
 
 local Core = NorgannonCore
 local D = Dimension
@@ -46,6 +49,7 @@ local win
 local holders, buttons = {}, {}     -- [bag] = holder frame; [bag][slot] = button
 local headers, freeLabels = {}, {}
 local dirty = false
+local hasLayout = false
 local openedAt
 local broken
 
@@ -202,8 +206,9 @@ local function headerFor(i)
   h.count = UI.Text(h, "body", 11, C.faint)
   h.count:SetPoint("RIGHT", 0, 0)
   h:SetScript("OnClick", function(self)
+    if self.key == "free" then return end
     D.db.collapsed[self.key] = not D.db.collapsed[self.key] or nil
-    Pocket:Layout()
+    Pocket:Layout(true)
   end)
   headers[i] = h
   return h
@@ -228,15 +233,34 @@ local function canLayout()
   return not (split and split:IsShown())
 end
 
----Places everything, or notes that it has to wait.
-function Pocket:Layout()
+---True if the game has locked the bag buttons, which it can only do in combat.
+local function buttonsLocked()
+  if not D.Global("InCombatLockdown") then return false end
+  for _, slots in pairs(buttons) do
+    for _, b in pairs(slots) do return b:IsProtected() and true or false end
+  end
+  return false
+end
+
+---Whether opening now would show the items.
+function Pocket.CanShowNow()
+  return hasLayout or not buttonsLocked()
+end
+
+function Pocket.ForgetLayout() hasLayout = false end
+
+---Places everything, or notes that it has to wait. `now` is for what has to happen regardless of the
+---freeze, such as opening or a click on a section's title; only buttons the game has locked stop it.
+function Pocket:Layout(now)
   if not win then return end
-  if not canLayout() then
+  local allowed = canLayout() or (now and not buttonsLocked())
+  if not allowed then
     dirty = true
     drawAll()
     return
   end
   dirty = false
+  hasLayout = true
   local sections, free = self:Sections()
   local search = string.lower(win.search:GetText() or "")
   local step = TILE + GAP
@@ -352,7 +376,7 @@ local function build()
     win:ClearAllPoints()
     win:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -40, 100)
   end
-  win.search = UI.Search(win.body, "Search your bags", function() Pocket:Layout() end)
+  win.search = UI.Search(win.body, "Search your bags", function() Pocket:Layout(true) end)
   win.search:SetPoint("TOPLEFT", PAD, -6)
   win.search:SetPoint("TOPRIGHT", -PAD, -6)
   win.scroll = UI.ScrollArea(win.body)
@@ -393,16 +417,17 @@ function Pocket.KeepGameFrame(frame)
     local ok, bag = pcall(frame.GetBagID, frame)
     if ok and bag == KEYRING then return true end
   end
+  if not Pocket.CanShowNow() then return true end
   return D.Global("InCombatLockdown") and frame.IsProtected and frame:IsProtected()
 end
 
 function Pocket:Open()
   if not self:Enabled() then return end
   makeAll()
-  if broken or win:IsShown() then return end
+  if broken or win:IsShown() or not Pocket.CanShowNow() then return end
   openedAt = GetTime()
   win:Show()
-  self:Layout()
+  self:Layout(true)
   hideGameBags()
 end
 
@@ -473,8 +498,16 @@ Core:OnLogin(function()
   if not D.db then return end
   Pocket:Hook()
   Core:AfterCombat(function()
-    if Pocket:Enabled() then makeAll() end
+    if Pocket:Enabled() then
+      makeAll()
+      if not broken then Pocket:Layout(true) end
+    end
   end, "dimension.pocket")
+end)
+
+-- ready ahead of a fight, in case the game locks the buttons once it starts
+Core:On("PLAYER_REGEN_DISABLED", "dimension.pocket", function()
+  if Pocket:Enabled() and win and not win:IsShown() then Pocket:Layout(true) end
 end)
 
 -- a new bag means new slots; catching up once a frozen layout is allowed to move

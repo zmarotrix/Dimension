@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1, 2026-11-06
+
+- Fixed: the bag window was empty if the first time you opened it was in combat. It's now laid out at login and ahead of each
+  fight, and opening always shows your items. If the game does lock its bag buttons in combat, its own bags open instead of an empty window.
+- Section titles and the search now work in combat.
+
 ## 0.10.0, 2026-11-06
 
 - **A bag window grouped by what things are for,** instead of the game's bags: Sells at the next vendor, For your quests, Your
