@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.2, 2026-11-06
+
+- If the game blocks anything of Dimension's in combat, or locks its bag buttons, fights use the game's own bags from then on,
+  and the window comes back when combat ends. A setting turns this on or off by hand.
+- The window now keeps updating in combat, so new loot shows straight away. It only holds still under the mouse.
+
 ## 0.10.1, 2026-11-06
 
 - Fixed: the bag window was empty if the first time you opened it was in combat. It's now laid out at login and ahead of each
