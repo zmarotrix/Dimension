@@ -1,6 +1,7 @@
--- The bag window: one window, grouped by what things are for. Nothing physically moves, so it's instant,
--- can't fight the server's locks and doesn't depend on any sort working. The first sections come from
--- the rules and NorgannonDB, which is what a generic bag add-on can't know.
+-- The bag window: rows of small groups, by what things are for. Nothing physically moves, so it's instant,
+-- can't fight the server's locks and doesn't depend on any sort working. Several groups come from the
+-- rules and NorgannonDB, which is what a generic bag add-on can't know. Which group claims an item is one
+-- fixed order; where groups sit is the player's (Edit layout), and so is a choice of group for any item.
 --
 -- Every slot is the client's own ContainerFrameItemButtonTemplate, so clicking, dragging, selling, using
 -- and tooltips stay the game's own code. Two things keep item use free of taint. Each button gets its
@@ -24,29 +25,42 @@ D.Pocket = Pocket
 local Rules, Overlay = D.Rules, D.Overlay
 
 local TEMPLATE = "ContainerFrameItemButtonTemplate"
-local COLS, TILE, GAP = 10, 37, 2
+local COLS, TILE, GAP = 16, 37, 2
+local GROUP_GAP = 12        -- pixels between groups in a row
+local ROW_GAP = 6
+local WRAP_AT = 8           -- a group up to this many items stays on one line
+local ARROW = 16
+local MAX_ROW = 7
 local PAD = 10
 local HEADER_H = 20
 local WINDOW_HEAD, SEARCH_H, FOOT = 44, 30, 30
 local SCREEN_SHARE = .8     -- the most of the screen it takes before it scrolls
 local KEYRING = -1          -- Enum.BagIndex.Keyring: the game's own frame keeps showing it
 
--- in order: an item is in the first section that claims it
-local SECTIONS = {
-  { key = "sell", label = "Sells at the next vendor", ours = true, claims = function(item) return item.verdict == "sell" end },
-  { key = "quest", label = "For your quests", ours = true, claims = function(item) return item.facts.class == Rules.CLASS_QUEST or item.questItem or Rules.QuestWants(item.id) end },
-  { key = "prof", label = "Your professions use", ours = true, claims = function(item) return Rules.ProfessionUses(item.id) end },
-  { key = "every", label = "Always with you", claims = function(item) return Rules.IsEveryday(item.id) end },
-  { key = "cons", label = "Consumables", claims = function(item) return Core.Bags.Kind(item.id, 1) == "consumable" end },
-  { key = "gear", label = "Gear", claims = function(item) return Core.Bags.Kind(item.id, 1) == "gear" end },
-  { key = "recipe", label = "Recipes", claims = function(item) return Core.Bags.Kind(item.id, 1) == "recipe" end },
-  { key = "trade", label = "Other trade goods", claims = function(item) return Core.Bags.Kind(item.id, 1) == "trade" end },
-  { key = "other", label = "Everything else", claims = function() return true end },
+-- an item is in the first of these that claims it, wherever the groups have been moved to
+local function kind(item) return Core.Bags.Kind(item.id, 1) end
+local GROUPS = {
+  { key = "sell", label = "Sells next vendor", ours = true, row = 0, claims = function(item) return item.verdict == "sell" end },
+  { key = "quest", label = "For your quests", ours = true, row = 0, claims = function(item) return item.facts.class == Rules.CLASS_QUEST or item.questItem or Rules.QuestWants(item.id) end },
+  { key = "every", label = "Always with you", row = 0, claims = function(item) return Rules.IsEveryday(item.id) end },
+  { key = "keeps", label = "Keepsakes", ours = true, row = 0, claims = function(item) return Rules.IsKeepsake(item.id, item.bound) end },
+  { key = "food", label = "Food & drink", row = 1, claims = function(item) return kind(item) == "consumable" and Rules.ConsumableKind(item.id, item.facts, item.name) == "food" end },
+  { key = "pots", label = "Potions", row = 1, claims = function(item) return kind(item) == "consumable" and Rules.ConsumableKind(item.id, item.facts, item.name) == "potion" end },
+  { key = "cons", label = "Consumables", row = 1, claims = function(item) return kind(item) == "consumable" end },
+  { key = "prof", label = "Your professions use", ours = true, row = 2, claims = function(item) return Rules.ProfessionUses(item.id) end },
+  { key = "recipe", label = "Recipes", row = 2, claims = function(item) return kind(item) == "recipe" end },
+  { key = "trade", label = "Other trade goods", row = 2, claims = function(item) return kind(item) == "trade" end },
+  { key = "gear", label = "Gear", row = 3, claims = function(item) return kind(item) == "gear" end },
+  { key = "other", label = "Everything else", row = 3, claims = function() return true end },
+  { key = "empty", label = "Empty", row = 4, empty = true, claims = function() return false end },
 }
+local GROUP_BY_KEY = {}
+for _, g in ipairs(GROUPS) do GROUP_BY_KEY[g.key] = g end
 
 local win
 local holders, buttons = {}, {}     -- [bag] = holder frame; [bag][slot] = button
-local headers, freeLabels = {}, {}
+local headers, freeLabels, catchers = {}, {}, {}
+local editing = false
 local dirty = false
 local openedAt
 local broken
@@ -56,7 +70,7 @@ function Pocket:IsShown() return win ~= nil and win:IsShown() end
 function Pocket:Window() return win end
 
 -------------------------------------------------------------------------------------------
--- Sections: only reads, so it can be checked without any frames
+-- Groups: only reads, so it can be checked without any frames
 -------------------------------------------------------------------------------------------
 
 local function byQuality(a, b)
@@ -68,50 +82,131 @@ local function byQuality(a, b)
   return a.slot < b.slot
 end
 
----The sections with something in them, in order, and the free slots by kind of bag:
----{ { key, label, ours, items = { { bag, slot, id, name, quality, count } } } }, { { bag, slot, count } }.
+---Where the groups sit: { { key, row } }, top to bottom and left to right. A saved layout keeps its order;
+---a group added in a later version turns up where it would by default.
+function Pocket.Arrangement()
+  local out, seen = {}, {}
+  for _, entry in ipairs(D.db.layout or {}) do
+    if GROUP_BY_KEY[entry.key] and not seen[entry.key] then
+      seen[entry.key] = true
+      out[#out + 1] = { key = entry.key, row = entry.row }
+    end
+  end
+  for _, g in ipairs(GROUPS) do
+    if not seen[g.key] then out[#out + 1] = { key = g.key, row = g.row } end
+  end
+  for i, entry in ipairs(out) do entry.order = i end
+  table.sort(out, function(a, b)
+    if a.row ~= b.row then return a.row < b.row end
+    return a.order < b.order
+  end)
+  return out
+end
+
+---Moves a group "left", "right", "up" or "down" and saves where everything now sits.
+function Pocket:MoveGroup(key, direction)
+  local list = self.Arrangement()
+  local at
+  for i, entry in ipairs(list) do
+    if entry.key == key then at = i end
+  end
+  if not at then return end
+  local entry = list[at]
+  if direction == "up" then
+    entry.row = math.max(0, entry.row - 1)
+  elseif direction == "down" then
+    entry.row = math.min(MAX_ROW, entry.row + 1)
+  else
+    local other = list[direction == "left" and at - 1 or at + 1]
+    if other and other.row == entry.row then entry.order, other.order = other.order, entry.order end
+  end
+  table.sort(list, function(a, b)
+    if a.row ~= b.row then return a.row < b.row end
+    return a.order < b.order
+  end)
+  local saved = {}
+  for i, e in ipairs(list) do saved[i] = { key = e.key, row = e.row } end
+  D.db.layout = saved
+  self:Layout(true)
+end
+
+---Puts every group back and forgets each item's chosen group.
+function Pocket:ResetLayout()
+  D.db.layout = nil
+  wipe(D.db.assign)
+  self:Layout(true)
+end
+
+---The groups with something in them, in the player's arrangement, and the free slots by kind of bag:
+---{ { key, label, ours, row, items = { { bag, slot, id, name, quality, count } } } }, { { bag, slot, count } }.
+---While editing, empty groups are included so they can be moved.
 function Pocket:Sections()
   local filled, free = {}, {}
-  for _, s in ipairs(SECTIONS) do filled[s.key] = {} end
+  for _, g in ipairs(GROUPS) do filled[g.key] = {} end
   local freeByKind, order = {}, {}
   for _, entry in ipairs(D.Carried()) do
     local _, family = D.In("C_Container", "GetContainerNumFreeSlots", entry.id)
-    local kind = entry.reagent and "reagent" or (family and family ~= 0 and ("family" .. family)) or "any"
+    local bagKind = entry.reagent and "reagent" or (family and family ~= 0 and ("family" .. family)) or "any"
     for slot = 1, D.Size(entry.id) do
       local info = D.Read(entry.id, slot)
       if info then
         local facts = Rules.Facts(info.itemID)
         local quest = D.In("C_Container", "GetContainerItemQuestInfo", entry.id, slot)
         local item = { bag = entry.id, slot = slot, id = info.itemID, name = info.itemName or facts.name or "", quality = info.quality or facts.quality,
-          count = info.stackCount or 1, facts = facts, questItem = type(quest) == "table" and quest.isQuestItem,
+          count = info.stackCount or 1, facts = facts, bound = info.isBound, questItem = type(quest) == "table" and quest.isQuestItem,
           verdict = Rules:Verdict(info.itemID, info, entry.id, slot) }
-        for _, s in ipairs(SECTIONS) do
-          if s.claims(item) then
-            table.insert(filled[s.key], item)
-            break
+        local chosen = D.db.assign[info.itemID]
+        if chosen and GROUP_BY_KEY[chosen] and not GROUP_BY_KEY[chosen].empty then
+          table.insert(filled[chosen], item)
+        else
+          for _, g in ipairs(GROUPS) do
+            if g.claims(item) then
+              table.insert(filled[g.key], item)
+              break
+            end
           end
         end
       else
-        local group = freeByKind[kind]
+        local group = freeByKind[bagKind]
         if not group then
           group = { bag = entry.id, slot = slot, count = 0 }
-          freeByKind[kind] = group
+          freeByKind[bagKind] = group
           order[#order + 1] = group
         end
         group.count = group.count + 1
       end
     end
   end
+  for i, group in ipairs(order) do free[i] = group end
   local out = {}
-  for _, s in ipairs(SECTIONS) do
-    local items = filled[s.key]
-    if #items > 0 then
-      table.sort(items, byQuality)
-      out[#out + 1] = { key = s.key, label = s.label, ours = s.ours, items = items }
+  for _, place in ipairs(self.Arrangement()) do
+    local g = GROUP_BY_KEY[place.key]
+    local items = filled[g.key]
+    table.sort(items, byQuality)
+    if #items > 0 or (g.empty and #free > 0) or editing then
+      out[#out + 1] = { key = g.key, label = g.label, ours = g.ours, row = place.row, empty = g.empty, items = items }
     end
   end
-  for i, group in ipairs(order) do free[i] = group end
   return out, free
+end
+
+---{ { text, func } } for choosing an item's group, for the menu Edit layout shows.
+function Pocket.GroupChoices(id)
+  local items = {}
+  for _, g in ipairs(GROUPS) do
+    if not g.empty then
+      local here = D.db.assign[id] == g.key
+      items[#items + 1] = { text = g.label .. (here and " (chosen)" or ""), func = function()
+        D.db.assign[id] = g.key
+        Pocket:Layout(true)
+      end }
+    end
+  end
+  items[#items + 1] = { text = "Back to the rules", func = function()
+    D.db.assign[id] = nil
+    Pocket:Layout(true)
+  end }
+  return items
 end
 
 -------------------------------------------------------------------------------------------
@@ -201,16 +296,54 @@ local function headerFor(i)
   h:RegisterForClicks("LeftButtonUp")
   h.label = UI.Text(h, "title", 13, C.goldSoft)
   h.label:SetPoint("LEFT", 0, 0)
-  h.count = UI.Text(h, "body", 11, C.faint)
-  h.count:SetPoint("RIGHT", 0, 0)
   h:SetScript("OnClick", function(self)
-    if self.key == "free" then return end
     D.db.collapsed[self.key] = not D.db.collapsed[self.key] or nil
     Pocket:Layout(true)
   end)
+  h.arrows = {}
+  local previous
+  for _, spec in ipairs({ { "down", "v" }, { "up", "^" }, { "right", ">" }, { "left", "<" } }) do
+    local a = UI.Button(h, spec[2], "quiet", function() Pocket:MoveGroup(h.key, spec[1]) end)
+    a:SetSize(ARROW, ARROW)
+    if previous then a:SetPoint("RIGHT", previous, "LEFT", -1, 0) else a:SetPoint("RIGHT", 0, 0) end
+    previous = a
+    h.arrows[spec[1]] = a
+  end
   headers[i] = h
   return h
 end
+
+---In Edit layout, a click on an item chooses its group instead of using it, so a plain button sits over the
+---game's: its own click must never run from here.
+local function catcherFor(i)
+  local c = catchers[i]
+  if c then return c end
+  c = CreateFrame("Button", nil, win.scroll.content)
+  c:SetSize(TILE, TILE)
+  c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  c:SetScript("OnClick", function(self) Pocket:ChooseGroup(self.itemId, self) end)
+  catchers[i] = c
+  return c
+end
+
+function Pocket:ChooseGroup(id, owner)
+  local name = Rules.Facts(id).name or tostring(id)
+  Core:ShowActionMenu(owner or win, "item", id, { title = name .. " goes in", items = self.GroupChoices(id) })
+end
+
+---Edit layout on or off. Not in combat: it's no time to rearrange, and the game may refuse.
+function Pocket:SetEditing(on)
+  if on and D.PauseReason() then
+    D:Print("Not now: " .. D.PauseReason() .. ".")
+    return false
+  end
+  editing = on and true or false
+  win.edit:SetLabel(editing and "Done" or "Edit layout")
+  win.reset:SetShown(editing)
+  self:Layout(true)
+  return true
+end
+function Pocket:Editing() return editing end
 
 local function freeLabel(i)
   local l = freeLabels[i]
@@ -265,70 +398,89 @@ function Pocket:Layout(now)
   -- only what's left over gets hidden at the end: hiding a slot it's about to show again would close the
   -- stack-split box and make the tooltip under the mouse flicker
   local wanted = {}
-  local y, usedHeaders = -2, 0
-  local function place(b, column, top)
+  local owner = GameTooltip:GetOwner()
+  local function place(b, x, y)
     wanted[b] = true
     b:ClearAllPoints()
-    b:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", column * step, top)
+    b:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
     b:Show()
   end
-  local owner = GameTooltip:GetOwner()
+
+  for _, l in ipairs(freeLabels) do l:Hide() end
+  for _, c in ipairs(catchers) do c:Hide() end
+  local usedCatchers = 0
+  local x, y, lineHeight, row = 0, -2, 0, nil
+  local usedHeaders = 0
   for _, s in ipairs(sections) do
     usedHeaders = usedHeaders + 1
     local h = headerFor(usedHeaders)
-    local shut = D.db.collapsed[s.key]
+    local shut = D.db.collapsed[s.key] and not editing
+    local count = s.empty and #free or #s.items
     h.key = s.key
-    h.label:SetText((shut and "+ " or "- ") .. s.label)
+    h.label:SetText(shut and string.format("+ %s (%d)", s.label, s.empty and 0 or #s.items) or s.label)
     h.label:SetTextColor(unpack(s.ours and UI.Accent("dimension") or C.goldSoft))
-    h.count:SetText(tostring(#s.items))
-    h:ClearAllPoints()
-    h:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", 0, y)
-    h:SetWidth(width)
-    h:Show()
-    y = y - HEADER_H
-    if not shut then
-      for i, item in ipairs(s.items) do
-        local b = buttonFor(item.bag, item.slot)
-        if b == false then return end
-        place(b, (i - 1) % COLS, y - math.floor((i - 1) / COLS) * step)
-        drawSlot(b, item.bag, item.slot, owner)
-        local matches = search == "" or string.find(string.lower(item.name), search, 1, true) ~= nil
-        b:SetAlpha(matches and 1 or .2)
-      end
-      y = y - math.ceil(#s.items / COLS) * step - 4
+    for _, a in pairs(h.arrows) do a:SetShown(editing) end
+
+    -- wide enough for its title, then its items: long groups fold to two lines
+    local titleWidth = (h.label:GetStringWidth() or 0) + 6 + (editing and 4 * (ARROW + 1) or 0)
+    local shown = shut and 0 or count
+    local columns = shown <= WRAP_AT and shown or math.ceil(shown / 2)
+    columns = math.min(COLS, math.max(columns, math.ceil(titleWidth / step)))
+    local pixels = math.min(width, columns * step - GAP)
+
+    if row ~= nil and (s.row ~= row or x + pixels > width) then
+      y = y - lineHeight - ROW_GAP
+      x, lineHeight = 0, 0
     end
+    row = s.row
+    h:ClearAllPoints()
+    h:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
+    h:SetWidth(pixels)
+    h:Show()
+
+    local top = y - HEADER_H
+    if not shut then
+      if s.empty then
+        -- one real slot per kind of bag, so an item can be dropped on it
+        for i, group in ipairs(free) do
+          local b = buttonFor(group.bag, group.slot)
+          if b == false then return end
+          place(b, x + (i - 1) * step, top)
+          drawSlot(b, group.bag, group.slot, owner)
+          b:SetAlpha(1)
+          local l = freeLabel(i)
+          l:ClearAllPoints()
+          l:SetPoint("TOPLEFT", b, "TOPLEFT")
+          l:SetFrameLevel((b:GetFrameLevel() or 1) + 4)
+          l.text:SetText(tostring(group.count))
+          l:Show()
+        end
+      else
+        for i, item in ipairs(s.items) do
+          local b = buttonFor(item.bag, item.slot)
+          if b == false then return end
+          local bx, by = x + (i - 1) % columns * step, top - math.floor((i - 1) / columns) * step
+          place(b, bx, by)
+          drawSlot(b, item.bag, item.slot, owner)
+          local matches = search == "" or string.find(string.lower(item.name), search, 1, true) ~= nil
+          b:SetAlpha(matches and 1 or .2)
+          if editing then
+            usedCatchers = usedCatchers + 1
+            local c = catcherFor(usedCatchers)
+            c.itemId = item.id
+            c:ClearAllPoints()
+            c:SetPoint("TOPLEFT", b, "TOPLEFT")
+            c:SetFrameLevel((b:GetFrameLevel() or 1) + 5)
+            c:Show()
+          end
+        end
+      end
+    end
+    local lines = columns > 0 and math.ceil(shown / columns) or 0
+    lineHeight = math.max(lineHeight, HEADER_H + lines * step)
+    x = x + pixels + GROUP_GAP
   end
   for i = usedHeaders + 1, #headers do headers[i]:Hide() end
-
-  -- the free slots: one real slot per kind of bag, so an item can be dropped on it
-  for _, l in ipairs(freeLabels) do l:Hide() end
-  if #free > 0 then
-    usedHeaders = usedHeaders + 1
-    local h = headerFor(usedHeaders)
-    h.key = "free"
-    h.label:SetText("Free")
-    h.label:SetTextColor(unpack(C.goldSoft))
-    h.count:SetText("")
-    h:ClearAllPoints()
-    h:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", 0, y)
-    h:SetWidth(width)
-    h:Show()
-    y = y - HEADER_H
-    for i, group in ipairs(free) do
-      local b = buttonFor(group.bag, group.slot)
-      if b == false then return end
-      place(b, i - 1, y)
-      drawSlot(b, group.bag, group.slot, owner)
-      b:SetAlpha(1)
-      local l = freeLabel(i)
-      l:ClearAllPoints()
-      l:SetPoint("TOPLEFT", b, "TOPLEFT")
-      l:SetFrameLevel((b:GetFrameLevel() or 1) + 4)
-      l.text:SetText(tostring(group.count))
-      l:Show()
-    end
-    y = y - step
-  end
   for _, slots in pairs(buttons) do
     for _, b in pairs(slots) do
       if not wanted[b] then b:Hide() end
@@ -337,7 +489,7 @@ function Pocket:Layout(now)
   Pocket.lastSections, Pocket.lastFree = sections, free
 
   -- it fits its contents until it would take too much of the screen
-  local height = -y
+  local height = -(y - lineHeight)
   win.scroll.content:SetSize(width, height)
   local chrome = WINDOW_HEAD + SEARCH_H + FOOT + PAD
   win:SetSize(width + 2 * PAD + 12, math.min(height + chrome, GetScreenHeight() * SCREEN_SHARE))
@@ -349,7 +501,7 @@ function Pocket:DrawFooter()
   win:SetSub(string.format("%d of %d free", totalFree, total))
   win.money:SetText(D.Money(D.Global("GetMoney") or 0))
   local status = D.Mover:Status()
-  local text = ""
+  local text = editing and "Arrows move a group. Click an item to choose its group." or ""
   if status then
     text = status.paused and ("Paused: " .. status.paused) or string.format("%s: %d of %d", status.label or "Moving", status.done, status.total)
   end
@@ -392,6 +544,13 @@ local function build()
   win.room = UI.Button(win.footer, "Make room", "quiet", function() D.Window:Open("room") end)
   win.room:SetSize(78, 20)
   win.room:SetPoint("RIGHT", win.more, "LEFT", -4, 0)
+  win.edit = UI.Button(win.footer, "Edit layout", "quiet", function() Pocket:SetEditing(not editing) end)
+  win.edit:SetSize(78, 20)
+  win.edit:SetPoint("RIGHT", win.room, "LEFT", -4, 0)
+  win.reset = UI.Button(win.footer, "Reset", "quiet", function() Pocket:ResetLayout() end)
+  win.reset:SetSize(50, 20)
+  win.reset:SetPoint("RIGHT", win.edit, "LEFT", -4, 0)
+  win.reset:Hide()
   Pocket.frame = win
 end
 
@@ -432,7 +591,9 @@ function Pocket:Open()
 end
 
 function Pocket:Close()
-  if win then win:Hide() end
+  if not win then return end
+  if editing then self:SetEditing(false) end
+  win:Hide()
 end
 
 function Pocket:Toggle()

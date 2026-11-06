@@ -205,7 +205,8 @@ Core:On("ADDON_LOADED", D, function(_, name)
   D.db = DimensionDB
   D.db.rules = fill(D.db.rules or {}, RULES)
   D.db.itemMarks = D.db.itemMarks or {}  -- [itemId] = "junk" | "keep"
-  D.db.collapsed = D.db.collapsed or {}  -- [section key] = true
+  D.db.collapsed = D.db.collapsed or {}  -- [group key] = true
+  D.db.assign = D.db.assign or {}        -- [itemId] = group key, chosen in Edit layout
   D.db.chars = D.db.chars or {}
   D.db.probe = D.db.probe or {}
 end)

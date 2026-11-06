@@ -126,6 +126,27 @@ function Rules.ProfessionUses(id)
   return D.db.rules.altKeep and anotherCharacterUses(id) ~= nil
 end
 
+---A soulbound or grey quest reward that isn't gear or a consumable: something kept for what it is.
+function Rules.IsKeepsake(id, bound)
+  local info = Core.DB:ItemInfo(id)
+  if not (info and info.rewardOf and info.rewardOf[1]) then return false end
+  local facts = Rules.Facts(id)
+  if not (bound or facts.quality == POOR) then return false end
+  return Core.Bags.Kind(id, 1) == "other"
+end
+
+---"food", "potion" or "other" for a consumable. The client's subclasses and older data number these differently,
+---so it goes by what the item does and is called too. Being wrong only means landing in Consumables, and
+---Edit layout can fix any one item.
+function Rules.ConsumableKind(id, facts, name)
+  local spell = D.In("C_Item", "GetItemSpell", id) or D.Global("GetItemSpell", id)
+  if type(spell) == "string" and (spell:find("Food") or spell:find("Drink") or spell:find("Refreshment")) then return "food" end
+  if facts.subclass == 1 or facts.subclass == 2 or facts.subclass == 3 then return "potion" end
+  local text = name or facts.name or ""
+  if text:find("Potion") or text:find("Elixir") or text:find("Flask") then return "potion" end
+  return "other"
+end
+
 ---The hearthstone and profession tools: what every trip needs.
 function Rules.IsEveryday(id)
   return id == HEARTHSTONE or TOOLS[id] ~= nil

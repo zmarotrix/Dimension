@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0, 2026-11-06
+
+- **The bag window is now rows of small groups** rather than one long column: Sells next vendor, For your quests, Always with you,
+  Keepsakes, Food & drink, Potions, Consumables, Your professions use, Recipes, Other trade goods, Gear, Everything else and Empty.
+- **Edit layout:** arrows move a group, and clicking an item chooses its group. Reset puts everything back.
+
 ## 0.10.2, 2026-11-06
 
 - If the game blocks anything of Dimension's in combat, or locks its bag buttons, fights use the game's own bags from then on,

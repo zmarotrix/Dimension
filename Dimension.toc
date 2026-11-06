@@ -2,7 +2,7 @@
 ## Title: |cfff08a9dDimension|r
 ## Notes: Your bags, looked after: sells what's safe, frees space when bags fill up, runs bank trips and keeps things in their places, and can always say why. Powered by NorgannonDB. /dim
 ## Author: Maro
-## Version: 0.10.2
+## Version: 0.11.0
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB, NorgannonDB_Core
 ## SavedVariables: DimensionDB
