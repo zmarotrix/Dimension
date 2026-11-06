@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.1, 2026-11-06
+
+- **Other add-ons' marks:** the bag window now tells them when it fills a slot, so Clairvoyance's quest
+  item mark shows there as it does on the game's bags.
+
 ## 0.11.0, 2026-11-06
 
 - **The bag window is now rows of small groups** rather than one long column: Sells next vendor, For your quests, Always with you,

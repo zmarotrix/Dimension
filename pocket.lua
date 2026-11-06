@@ -273,6 +273,7 @@ local function drawSlot(b, bag, slot, owner)
   b:CheckUpdateTooltip(owner)
   b:SetMatchesSearch(true)
   Overlay.RefreshButton(b)
+  Core:Send("NORGANNON_BAG_BUTTON_UPDATED", b)   -- for other add-ons' marks, as on the game's bags
 end
 
 local function drawAll()
