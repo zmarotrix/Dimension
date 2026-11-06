@@ -6,11 +6,11 @@
 -- Unknown never counts as safe: an item the client hasn't cached has no price yet, so it stays.
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 
 local Rules = {}
-P.Rules = Rules
+D.Rules = Rules
 
 local RARE = 3      -- Enum.ItemQuality.Rare
 local POOR = 0
@@ -53,9 +53,9 @@ for _, v in pairs(WEAPON) do MAPPED_WEAPON[v] = true end
 ---What the client says about an item: { quality, price, stack, class, subclass, name, reagent }, with
 ---`price` nil until the client has cached it.
 function Rules.Facts(id)
-  local name, _, quality, _, _, _, _, stack, _, icon, price, class, subclass, _, _, _, reagent = P.In("C_Item", "GetItemInfo", id)
+  local name, _, quality, _, _, _, _, stack, _, icon, price, class, subclass, _, _, _, reagent = D.In("C_Item", "GetItemInfo", id)
   if class == nil then
-    local _, _, _, _, instantIcon, instantClass, instantSub = P.In("C_Item", "GetItemInfoInstant", id)
+    local _, _, _, _, instantIcon, instantClass, instantSub = D.In("C_Item", "GetItemInfoInstant", id)
     class, subclass, icon = instantClass, instantSub, icon or instantIcon
   end
   return { name = name, quality = quality, stack = stack, icon = icon, price = price, class = class, subclass = subclass, reagent = reagent }
@@ -63,7 +63,7 @@ end
 
 ---True if this class can never equip the gear. False when unsure.
 function Rules.CantEverUse(facts)
-  local _, token = P.Global("UnitClass", "player")
+  local _, token = D.Global("UnitClass", "player")
   local can = CAN_USE[token]
   if not can or facts.subclass == nil then return false end
   if facts.class == CLASS_ARMOR then return MAPPED_ARMOR[facts.subclass] and not can.armor[facts.subclass] end
@@ -132,13 +132,13 @@ end
 local function hardKeep(id, facts, info, bag, slot, me)
   if id == HEARTHSTONE then return "Your hearthstone" end
   if bag and me.pins[bag .. ":" .. slot] == id then return "Pinned to this slot" end
-  if P.db.itemMarks[id] == "keep" then return "You marked this Keep" end
+  if D.db.itemMarks[id] == "keep" then return "You marked this Keep" end
   if TOOLS[id] then return "A profession tool" end
   local listed = Rules.OnALists(id, me, Core.Bags.Kind(id, facts.quality))
   if listed then return listed end
   if facts.class == CLASS_QUEST then return "Quest item" end
   if bag then
-    local quest = P.In("C_Container", "GetContainerItemQuestInfo", bag, slot)
+    local quest = D.In("C_Container", "GetContainerItemQuestInfo", bag, slot)
     if type(quest) == "table" and (quest.isQuestItem or quest.questID) then return "Quest item" end
   end
   local dbInfo = Core.DB:ItemInfo(id)
@@ -152,11 +152,11 @@ local function hardKeep(id, facts, info, bag, slot, me)
   if facts.class == CLASS_RECIPE then return "A recipe" end
   if facts.quality and facts.quality >= RARE then return "Rare or better" end
   if bag then
-    local inSet = P.In("C_Container", "GetContainerItemEquipmentSetInfo", bag, slot)
+    local inSet = D.In("C_Container", "GetContainerItemEquipmentSetInfo", bag, slot)
     if inSet then return "In an equipment set" end
-    local purchase = P.In("C_Container", "GetContainerItemPurchaseInfo", bag, slot, false)
+    local purchase = D.In("C_Container", "GetContainerItemPurchaseInfo", bag, slot, false)
     if type(purchase) == "table" and (purchase.refundSeconds or 0) > 0 then return "Still refundable" end
-    if P.In("C_Container", "IsBattlePayItem", bag, slot) then return "Bought from the shop" end
+    if D.In("C_Container", "IsBattlePayItem", bag, slot) then return "Bought from the shop" end
   end
   return nil
 end
@@ -164,7 +164,7 @@ end
 ---verdict, why: "sell" (at the next vendor), "keep" (protected) or "stay" (nothing applies).
 ---bag, slot and info are what's known about the copy in hand; without them only the item is judged.
 function Rules:Verdict(id, info, bag, slot)
-  local me = P:Me()
+  local me = D:Me()
   local facts = Rules.Facts(id)
   local quality = (info and info.quality) or facts.quality
   facts.quality = quality
@@ -176,9 +176,9 @@ function Rules:Verdict(id, info, bag, slot)
   if facts.price == nil then return "stay", "The game hasn't said what this sells for yet" end
   if facts.price <= 0 then return "stay", "No vendor value, so it can't be sold" end
 
-  local rules = P.db.rules
+  local rules = D.db.rules
   -- your own mark beats the recipe rules below it, but never the protections above
-  if P.db.itemMarks[id] == "junk" then
+  if D.db.itemMarks[id] == "junk" then
     if rules.marked then return "sell", "You marked this Junk" end
     return "stay", "Marked Junk, but selling marks is switched off"
   end
@@ -198,7 +198,7 @@ end
 ---{ { bag, slot, id, count, value, why, link } }. Locked items wait for the next look.
 function Rules:SellList()
   local out = {}
-  P.Each(P.Carried(), function(bag, slot, info)
+  D.Each(D.Carried(), function(bag, slot, info)
     local verdict, why = self:Verdict(info.itemID, info, bag, slot)
     if verdict == "sell" and not info.isLocked then
       local price = Rules.Facts(info.itemID).price or 0
@@ -215,7 +215,7 @@ end
 
 ---Cycles an item's mark: none, Junk, Keep, none.
 function Rules:CycleMark(id)
-  local marks = P.db.itemMarks
+  local marks = D.db.itemMarks
   if marks[id] == "junk" then
     marks[id] = "keep"
   elseif marks[id] == "keep" then
@@ -223,6 +223,6 @@ function Rules:CycleMark(id)
   else
     marks[id] = "junk"
   end
-  P:Changed()
+  D:Changed()
   return marks[id]
 end

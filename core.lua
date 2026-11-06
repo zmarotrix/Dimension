@@ -1,24 +1,24 @@
--- Providence: your bags, looked after. Sells what's safe, frees space, runs bank trips and keeps
+-- Dimension: your bags, looked after. Sells what's safe, frees space, runs bank trips and keeps
 -- things in their places, and can always say why. Built on NorgannonDB and NorgannonDB_Core.
--- Plan and client findings: docs/providence-v1.md; the look: design/suite/providence.html.
+-- Plan and client findings: docs/dimension-v1.md; the look: design/suite/dimension.html.
 
 local ADDON = ...
 local Core = NorgannonCore
 local DB = NorgannonDB
 
-Providence = { addonName = ADDON or "Providence" }
-local P = Providence
+Dimension = { addonName = ADDON or "Dimension" }
+local D = Dimension
 
 if not (Core and Core:Require(1, 16)) or not (DB and DB:RequireSchema(1, 4)) then
-  P.disabled = true
+  D.disabled = true
   C_Timer.After(5, function()
-    print("|cfff08a9dProvidence|r needs NorgannonDB 1.4 and NorgannonDB Core 1.16 or newer; it is turned off.")
+    print("|cfff08a9dDimension|r needs NorgannonDB 1.4 and NorgannonDB Core 1.16 or newer; it is turned off.")
   end)
   return
 end
 
-P.PREFIX = "|cfff08a9dProvidence|r"
-function P:Print(msg) Core:Print(msg, self.PREFIX) end
+D.PREFIX = "|cfff08a9dDimension|r"
+function D:Print(msg) Core:Print(msg, self.PREFIX) end
 
 -------------------------------------------------------------------------------------------
 -- Calling the client. Docs list calls for every game flavour, so any may be missing or refuse on
@@ -37,48 +37,48 @@ local function clean(ok, ...)
 end
 
 ---The global function name(...), with errors and secret values turned into nil.
-function P.Global(name, ...)
+function D.Global(name, ...)
   local fn = rawget(_G, name)
   if not fn then return nil end
   return clean(pcall(fn, ...))
 end
 
----The namespaced client function ns.name(...): P.In("C_Bank", "CanViewBank").
-function P.In(ns, name, ...)
+---The namespaced client function ns.name(...): D.In("C_Bank", "CanViewBank").
+function D.In(ns, name, ...)
   local t = rawget(_G, ns)
   local fn = t and t[name]
   if not fn then return nil end
   return clean(pcall(fn, ...))
 end
 
-function P.Now()
-  return P.Global("GetServerTime") or time()
+function D.Now()
+  return D.Global("GetServerTime") or time()
 end
 
 ---What's in a slot, as the client's table, or nil. A table holding secrets counts as nothing there.
-function P.Read(bag, slot)
-  local info = P.In("C_Container", "GetContainerItemInfo", bag, slot)
+function D.Read(bag, slot)
+  local info = D.In("C_Container", "GetContainerItemInfo", bag, slot)
   if type(info) ~= "table" or Core.IsSecret(info.itemID) or not info.itemID then return nil end
   return info
 end
 
-function P.Size(bag)
-  return P.In("C_Container", "GetContainerNumSlots", bag) or 0
+function D.Size(bag)
+  return D.In("C_Container", "GetContainerNumSlots", bag) or 0
 end
 
 ---Calls fn(bag, slot, info, entry) for every item in a list of containers from Core.Bags. fn
 ---returning true stops the walk.
-function P.Each(list, fn)
+function D.Each(list, fn)
   for _, entry in ipairs(list) do
-    for slot = 1, P.Size(entry.id) do
-      local info = P.Read(entry.id, slot)
+    for slot = 1, D.Size(entry.id) do
+      local info = D.Read(entry.id, slot)
       if info and fn(entry.id, slot, info, entry) then return end
     end
   end
 end
 
 ---The character's own bags, without the keyring, whose slots hold nothing else.
-function P.Carried()
+function D.Carried()
   local out = {}
   for _, entry in ipairs(Core.Bags:BagList()) do
     if not entry.keyring then out[#out + 1] = entry end
@@ -87,13 +87,13 @@ function P.Carried()
 end
 
 ---free, total slots across the bags.
-function P.FreeSlots()
+function D.FreeSlots()
   local free, total = 0, 0
-  for _, entry in ipairs(P.Carried()) do
-    local size = P.Size(entry.id)
+  for _, entry in ipairs(D.Carried()) do
+    local size = D.Size(entry.id)
     total = total + size
     for slot = 1, size do
-      if not P.Read(entry.id, slot) then free = free + 1 end
+      if not D.Read(entry.id, slot) then free = free + 1 end
     end
   end
   return free, total
@@ -105,20 +105,20 @@ end
 
 ---Why nothing may move right now, or nil. No bag call is flagged as blocked in combat, but a slot
 ---shifting under someone mid-fight is never what they want, so everything stops regardless.
-function P.PauseReason()
-  if P.Global("InCombatLockdown") then return "in combat" end
+function D.PauseReason()
+  if D.Global("InCombatLockdown") then return "in combat" end
   local kinds = rawget(_G, "Enum") and Enum.AddOnRestrictionType
   if kinds then
     for _, kind in pairs(kinds) do
-      if P.In("C_RestrictedActions", "IsAddOnRestrictionActive", kind) then return "the game has add-ons restricted" end
+      if D.In("C_RestrictedActions", "IsAddOnRestrictionActive", kind) then return "the game has add-ons restricted" end
     end
   end
   return nil
 end
 
 ---True when the cursor is holding something: that's the player mid-drag, not ours to disturb.
-function P.CursorBusy()
-  return P.Global("CursorHasItem") and true or false
+function D.CursorBusy()
+  return D.Global("CursorHasItem") and true or false
 end
 
 -------------------------------------------------------------------------------------------
@@ -152,25 +152,25 @@ local function fill(target, defaults)
 end
 
 -- the first-run presets: which rules each one turns on
-P.PRESETS = {
+D.PRESETS = {
   show = { autoSell = false, repair = false, merge = false, autoBank = false, tidyAfter = false },
   standard = { autoSell = true, repair = true, merge = true, autoBank = false, tidyAfter = false },
   free = { autoSell = true, repair = true, merge = true, autoBank = true, tidyAfter = true },
 }
 
-function P:ApplyPreset(key)
+function D:ApplyPreset(key)
   for rule, on in pairs(self.PRESETS[key] or {}) do self.db.rules[rule] = on end
   self.db.first = false
   self:Changed()
 end
 
 local function myKey()
-  local name = P.Global("UnitName", "player") or "?"
-  return tostring(P.Global("GetRealmName") or "?") .. "-" .. name
+  local name = D.Global("UnitName", "player") or "?"
+  return tostring(D.Global("GetRealmName") or "?") .. "-" .. name
 end
 
 ---This character's record: { carry, stash, stashKinds, pins, history }.
-function P:Me()
+function D:Me()
   local key = myKey()
   local me = self.db.chars[key]
   if not me then
@@ -185,8 +185,8 @@ function P:Me()
   return me
 end
 
----Adds to History. Everything Providence does goes through here, so nothing happens unexplained.
-function P:Log(what, detail, id, count, value)
+---Adds to History. Everything Dimension does goes through here, so nothing happens unexplained.
+function D:Log(what, detail, id, count, value)
   local history = self:Me().history
   table.insert(history, 1, { at = self.Now(), what = what, detail = detail, id = id, count = count, value = value })
   local oldest = self.Now() - HISTORY_DAYS * 86400
@@ -196,32 +196,32 @@ function P:Log(what, detail, id, count, value)
   self:Changed()
 end
 
-Core:On("ADDON_LOADED", P, function(_, name)
-  if name ~= P.addonName then return end
-  Core:Off("ADDON_LOADED", P)
-  local saved = rawget(_G, "ProvidenceDB")
-  ProvidenceDB = fill(type(saved) == "table" and saved or {}, DEFAULTS)
-  P.db = ProvidenceDB
-  P.db.rules = fill(P.db.rules or {}, RULES)
-  P.db.itemMarks = P.db.itemMarks or {}  -- [itemId] = "junk" | "keep"
-  P.db.chars = P.db.chars or {}
-  P.db.probe = P.db.probe or {}
+Core:On("ADDON_LOADED", D, function(_, name)
+  if name ~= D.addonName then return end
+  Core:Off("ADDON_LOADED", D)
+  local saved = rawget(_G, "DimensionDB")
+  DimensionDB = fill(type(saved) == "table" and saved or {}, DEFAULTS)
+  D.db = DimensionDB
+  D.db.rules = fill(D.db.rules or {}, RULES)
+  D.db.itemMarks = D.db.itemMarks or {}  -- [itemId] = "junk" | "keep"
+  D.db.chars = D.db.chars or {}
+  D.db.probe = D.db.probe or {}
 end)
 
 ---Something changed that the marks, the strip or an open window shows.
-function P:Changed()
+function D:Changed()
   Core:NextFrame(function()
-    if P.Overlay then P.Overlay:Refresh() end
-    if P.Window then P.Window:Refresh() end
-    if P.Panels then P.Panels:Refresh() end
-  end, "providence.changed")
+    if D.Overlay then D.Overlay:Refresh() end
+    if D.Window then D.Window:Refresh() end
+    if D.Panels then D.Panels:Refresh() end
+  end, "dimension.changed")
 end
 
 -------------------------------------------------------------------------------------------
 -- Money, for lines of text
 -------------------------------------------------------------------------------------------
 
-function P.Money(copper)
+function D.Money(copper)
   copper = math.floor(copper or 0)
   local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
   local out = {}
@@ -235,56 +235,56 @@ end
 -- Opening
 -------------------------------------------------------------------------------------------
 
-function P:Toggle()
+function D:Toggle()
   local win = self.Window and self.Window:Get()
   if not win then return end
   if win:IsShown() then win:Hide() else self.Window:Open() end
 end
 
-Core:RegisterAddon("providence", {
-  version = C_AddOns and C_AddOns.GetAddOnMetadata(P.addonName, "Version") or "0.9.0",
-  open = function() P:Toggle() end,
+Core:RegisterAddon("dimension", {
+  version = C_AddOns and C_AddOns.GetAddOnMetadata(D.addonName, "Version") or "0.9.0",
+  open = function() D:Toggle() end,
 })
 
-SLASH_PROVIDENCE1 = "/prov"
-SLASH_PROVIDENCE2 = "/providence"
-SlashCmdList["PROVIDENCE"] = function(msg)
+SLASH_DIMENSION1 = "/dim"
+SLASH_DIMENSION2 = "/dimension"
+SlashCmdList["DIMENSION"] = function(msg)
   local lower = string.lower(strtrim(msg or ""))
   if lower == "" then
-    P:Toggle()
+    D:Toggle()
   elseif lower == "settings" or lower == "options" then
-    P:OpenSettings()
+    D:OpenSettings()
   elseif lower == "tidy" then
-    P.Tidy:Run()
+    D.Tidy:Run()
   elseif lower == "room" then
-    P.Window:Open("room")
+    D.Window:Open("room")
   elseif lower == "probe" or lower:match("^probe ") then
-    P.Probe:Run(lower:match("^probe%s+(%S+)"))
+    D.Probe:Run(lower:match("^probe%s+(%S+)"))
   else
-    P:Print("/prov opens the window. Also: /prov tidy, /prov room, /prov settings, /prov probe [sell | move | sort]")
+    D:Print("/dim opens the window. Also: /dim tidy, /dim room, /dim settings, /dim probe [sell | move | sort]")
   end
 end
 
 -- the minimap button and the client's addon menu: click opens or closes, right-click the settings
 local function onClick(button)
-  if button == "RightButton" then P:OpenSettings() else P:Toggle() end
+  if button == "RightButton" then D:OpenSettings() else D:Toggle() end
 end
 local function tooltip(tt)
-  tt:AddLine("Providence", .941, .541, .616)
+  tt:AddLine("Dimension", .941, .541, .616)
   tt:AddLine("Your bags, looked after", 1, 1, 1)
   tt:AddLine("Click: open or close  ·  Right-click: settings  ·  Drag: move", .43, .4, .32)
 end
-Core:OnLogin(function() Core.MinimapButton:Add("providence", { onClick = onClick, tooltip = tooltip }) end)
-function Providence_OnAddonCompartmentClick(_, button) onClick(button) end
-function Providence_OnAddonCompartmentEnter(_, frame)
+Core:OnLogin(function() Core.MinimapButton:Add("dimension", { onClick = onClick, tooltip = tooltip }) end)
+function Dimension_OnAddonCompartmentClick(_, button) onClick(button) end
+function Dimension_OnAddonCompartmentEnter(_, frame)
   GameTooltip:SetOwner(frame, "ANCHOR_LEFT")
   tooltip(GameTooltip)
   GameTooltip:Show()
 end
-function Providence_OnAddonCompartmentLeave() GameTooltip:Hide() end
+function Dimension_OnAddonCompartmentLeave() GameTooltip:Hide() end
 
-BINDING_HEADER_PROVIDENCE = "Providence"
-BINDING_NAME_PROVIDENCE_TOGGLE = "Open or close Providence"
-BINDING_NAME_PROVIDENCE_MARK = "Mark the hovered item: Junk, Keep, none"
-BINDING_NAME_PROVIDENCE_PIN = "Pin the hovered bag slot"
-BINDING_NAME_PROVIDENCE_TIDY = "Tidy my bags"
+BINDING_HEADER_DIMENSION = "Dimension"
+BINDING_NAME_DIMENSION_TOGGLE = "Open or close Dimension"
+BINDING_NAME_DIMENSION_MARK = "Mark the hovered item: Junk, Keep, none"
+BINDING_NAME_DIMENSION_PIN = "Pin the hovered bag slot"
+BINDING_NAME_DIMENSION_TIDY = "Tidy my bags"

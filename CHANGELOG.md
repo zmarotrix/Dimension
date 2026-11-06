@@ -15,4 +15,4 @@ First build. It passes its harness but hasn't been played in the game yet.
   game's own sort.
 - **History:** everything it did, kept for 30 days.
 - **First run:** Just show me, Standard or Hands free. Nothing is automatic until you choose.
-- `/prov probe` tests what the client really allows.
+- `/dim probe` tests what the client really allows.

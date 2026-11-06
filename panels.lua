@@ -2,22 +2,22 @@
 -- why. They show only when there's something to say.
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 local UI = Core.UI
 local C = UI.C
 
 local Panels = {}
-P.Panels = Panels
-local Rules, Vendor, Bank, Mover = P.Rules, P.Vendor, P.Bank, P.Mover
-local itemName = P.Window.ItemName
+D.Panels = Panels
+local Rules, Vendor, Bank, Mover = D.Rules, D.Vendor, D.Bank, D.Mover
+local itemName = D.Window.ItemName
 
 local W, H = 340, 420
 
 ---A panel with a status line, a button and a list, anchored to the game's window for that NPC.
 local function makePanel(title, frameName)
-  local f = UI.Window({ addon = "providence", title = "Providence", sub = title, width = W, height = H })
-  f:SetAccent("providence")
+  local f = UI.Window({ addon = "dimension", title = "Dimension", sub = title, width = W, height = H })
+  f:SetAccent("dimension")
   f:Hide()
   if f.powered then f.powered:Hide() end
   f.status = UI.Text(f.body, "body", 13)
@@ -32,7 +32,7 @@ local function makePanel(title, frameName)
   f.action:SetHeight(24)
   f.action:SetPoint("TOPLEFT", 12, -56)
   f.action:SetPoint("TOPRIGHT", -12, -56)
-  f.list = P.Window.RowList(f.body)
+  f.list = D.Window.RowList(f.body)
   f.list:SetPoint("TOPLEFT", 0, -88)
   f.list:SetPoint("BOTTOMRIGHT", 0, 8)
   function f:Attach()
@@ -73,13 +73,13 @@ local function fillVendor()
   local f = vendorPanel
   f:Attach()
   local parts = {}
-  if #visit.sold > 0 then parts[#parts + 1] = string.format("Sold %d %s for %s", #visit.sold, #visit.sold == 1 and "stack" or "stacks", P.Money(visit.value)) end
-  if visit.repaired then parts[#parts + 1] = "repaired for " .. P.Money(visit.repaired) end
-  if visit.bought > 0 then parts[#parts + 1] = "bought for " .. P.Money(visit.spent) end
+  if #visit.sold > 0 then parts[#parts + 1] = string.format("Sold %d %s for %s", #visit.sold, #visit.sold == 1 and "stack" or "stacks", D.Money(visit.value)) end
+  if visit.repaired then parts[#parts + 1] = "repaired for " .. D.Money(visit.repaired) end
+  if visit.bought > 0 then parts[#parts + 1] = "bought for " .. D.Money(visit.spent) end
   f.status:SetText(#parts > 0 and table.concat(parts, ", ") or "Nothing sold yet")
   f.note:SetText(string.format("%d of %d of this visit's buyback used", math.min(#visit.sold, Vendor.BUYBACK_SLOTS), Vendor.BUYBACK_SLOTS))
 
-  local paused = P.PauseReason()
+  local paused = D.PauseReason()
   local held = Vendor:Held()
   if paused then
     f:SetAction(nil)
@@ -95,14 +95,14 @@ local function fillVendor()
   local items = {}
   if #visit.sold > 0 then items[#items + 1] = { group = "Sold just now" } end
   for _, rec in ipairs(visit.sold) do
-    items[#items + 1] = { id = rec.id, link = rec.link, title = itemName(rec.id, rec.name) .. (rec.count > 1 and (" × " .. rec.count) or ""), sub = rec.why, right = P.Money(rec.value),
-      actions = { { text = "Undo", width = 44, tip = "Buy it back and mark it Keep", run = function() Vendor:Undo(rec) P:Changed() end } } }
+    items[#items + 1] = { id = rec.id, link = rec.link, title = itemName(rec.id, rec.name) .. (rec.count > 1 and (" × " .. rec.count) or ""), sub = rec.why, right = D.Money(rec.value),
+      actions = { { text = "Undo", width = 44, tip = "Buy it back and mark it Keep", run = function() Vendor:Undo(rec) D:Changed() end } } }
   end
   local list = Rules:SellList()
   if #list > 0 then items[#items + 1] = { group = "Waiting" } end
   for _, e in ipairs(list) do
-    items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""), sub = e.why, right = P.Money(e.value),
-      actions = { { text = "Keep", width = 44, tip = "Mark it Keep", run = function() P.db.itemMarks[e.id] = "keep" P:Changed() end } } }
+    items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""), sub = e.why, right = D.Money(e.value),
+      actions = { { text = "Keep", width = 44, tip = "Mark it Keep", run = function() D.db.itemMarks[e.id] = "keep" D:Changed() end } } }
   end
   f.list:SetData(items, true)
   f:Show()
@@ -139,8 +139,8 @@ local function fillBank()
     f:SetAction(nil)
   elseif count > 0 then
     f.status:SetText(string.format("%d %s ready", count, count == 1 and "move" or "moves"))
-    f.note:SetText(plan.noRoom > 0 and string.format("%d won't fit", plan.noRoom) or (P.db.rules.autoBank and "These run when the bank opens" or "Runs on a click. A rule makes it run when the bank opens"))
-    f:SetAction(not P.PauseReason() and "Do it" or nil, function() Bank:Run() end)
+    f.note:SetText(plan.noRoom > 0 and string.format("%d won't fit", plan.noRoom) or (D.db.rules.autoBank and "These run when the bank opens" or "Runs on a click. A rule makes it run when the bank opens"))
+    f:SetAction(not D.PauseReason() and "Do it" or nil, function() Bank:Run() end)
   else
     f.status:SetText("Done")
     f.note:SetText(result and result.reason and ("Stopped: " .. result.reason) or "Everything is where your lists say")

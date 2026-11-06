@@ -9,15 +9,15 @@
 -- A sale is pick-up-then-sell, not UseContainerItem: "use" drinks the potion or equips the sword if
 -- the vendor has just closed, while selling with no vendor does nothing and the item goes back. If
 -- the game ignores SellCursorItem on this client, it falls back to UseContainerItem, checked against
--- the vendor being open in the same frame (db.sellMethod; /prov probe says which is in use).
+-- the vendor being open in the same frame (db.sellMethod; /dim probe says which is in use).
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 
 local Vendor = {}
-P.Vendor = Vendor
-local Rules = P.Rules
+D.Vendor = Vendor
+local Rules = D.Rules
 
 local BUYBACK_SLOTS = 12     -- BUYBACK_ITEMS_PER_PAGE in the client's own MerchantFrame code
 local PER_TICK = 3           -- sales per step: enough to feel instant, few enough to watch locks
@@ -47,12 +47,12 @@ end
 function Vendor.OtherSeller()
   -- Scrap sells by default, and a saved file only says so when it has been turned off
   local sets = rawget(_G, "Scrap_Sets")
-  if type(sets) == "table" and sets.sell ~= false and P.In("C_AddOns", "IsAddOnLoaded", "Scrap") then return "Scrap" end
+  if type(sets) == "table" and sets.sell ~= false and D.In("C_AddOns", "IsAddOnLoaded", "Scrap") then return "Scrap" end
 end
 
 ---How many more stacks this visit may sell without asking.
 function Vendor:Room()
-  if P.db.rules.overCap then return math.huge end
+  if D.db.rules.overCap then return math.huge end
   return math.max(0, BUYBACK_SLOTS - (visit and #visit.sold or 0))
 end
 
@@ -60,18 +60,18 @@ end
 ---game left the item on the cursor, which went straight back.
 local function sellOne(entry)
   if not merchantShown() then return false end
-  if P.PauseReason() or P.CursorBusy() then return false end
-  local info = P.Read(entry.bag, entry.slot)
+  if D.PauseReason() or D.CursorBusy() then return false end
+  local info = D.Read(entry.bag, entry.slot)
   if not info or info.itemID ~= entry.id or info.isLocked then return false end
   if Rules:Verdict(entry.id, info, entry.bag, entry.slot) ~= "sell" then return false end
-  if P.db.sellMethod == "use" then
-    P.In("C_Container", "UseContainerItem", entry.bag, entry.slot)
+  if D.db.sellMethod == "use" then
+    D.In("C_Container", "UseContainerItem", entry.bag, entry.slot)
   else
-    P.In("C_Container", "PickupContainerItem", entry.bag, entry.slot)
-    if not P.CursorBusy() then return false end
-    P.Global("SellCursorItem")
-    if P.CursorBusy() then
-      P.Global("ClearCursor")
+    D.In("C_Container", "PickupContainerItem", entry.bag, entry.slot)
+    if not D.CursorBusy() then return false end
+    D.Global("SellCursorItem")
+    if D.CursorBusy() then
+      D.Global("ClearCursor")
       return false, "refused"
     end
   end
@@ -81,8 +81,8 @@ end
 ---After enough sales ignored in a row, the other way of selling.
 local function ignoredSale()
   Vendor.ignored = (Vendor.ignored or 0) + 1
-  if Vendor.ignored >= GIVE_UP and P.db.sellMethod == "cursor" then
-    P.db.sellMethod = "use"
+  if Vendor.ignored >= GIVE_UP and D.db.sellMethod == "cursor" then
+    D.db.sellMethod = "use"
     Vendor.ignored = 0
     return true
   end
@@ -94,7 +94,7 @@ local function record(entry)
   table.insert(visit.sold, rec)
   visit.value = visit.value + entry.value
   table.insert(pending, { bag = entry.bag, slot = entry.slot, id = entry.id, at = GetTime(), rec = rec })
-  P:Log("Sold " .. tostring(entry.name or entry.id), entry.why, entry.id, entry.count, entry.value)
+  D:Log("Sold " .. tostring(entry.name or entry.id), entry.why, entry.id, entry.count, entry.value)
 end
 
 ---Sales still sitting in their slot long after: the game ignored them. Undoes the record, and after
@@ -104,7 +104,7 @@ local function checkPending()
     local p = pending[i]
     if GetTime() - p.at >= CHECK_AFTER then
       table.remove(pending, i)
-      local info = P.Read(p.bag, p.slot)
+      local info = D.Read(p.bag, p.slot)
       if info and info.itemID == p.id and not info.isLocked then
         for k, rec in ipairs(visit and visit.sold or {}) do
           if rec == p.rec then
@@ -113,7 +113,7 @@ local function checkPending()
             break
           end
         end
-        local history = P:Me().history
+        local history = D:Me().history
         if history[1] and history[1].id == p.id then table.remove(history, 1) end
         if ignoredSale() and visit and open then Vendor:Sell() end
       else
@@ -129,7 +129,7 @@ local function step()
     run = nil
     return
   end
-  if P.PauseReason() then return end
+  if D.PauseReason() then return end
   local left = run.pass and math.huge or Vendor:Room()
   local list = Rules:SellList()
   local waiting = {}
@@ -152,7 +152,7 @@ local function step()
   if sent == 0 and not changed then
     run = nil
   end
-  P:Changed()
+  D:Changed()
 end
 
 frame:SetScript("OnUpdate", function(_, dt)
@@ -182,12 +182,12 @@ end
 ---the undo. False if the game no longer holds it.
 function Vendor:Undo(rec)
   if not merchantShown() then return false end
-  local n = P.Global("GetNumBuybackItems") or 0
+  local n = D.Global("GetNumBuybackItems") or 0
   for i = n, 1, -1 do
-    local id = P.In("C_MerchantFrame", "GetBuybackItemID", i)
+    local id = D.In("C_MerchantFrame", "GetBuybackItemID", i)
     if id == rec.id then
-      P.Global("BuybackItem", i)
-      P.db.itemMarks[rec.id] = "keep"
+      D.Global("BuybackItem", i)
+      D.db.itemMarks[rec.id] = "keep"
       if visit then
         for k, r in ipairs(visit.sold) do
           if r == rec then
@@ -197,7 +197,7 @@ function Vendor:Undo(rec)
           end
         end
       end
-      P:Log("Bought back " .. tostring(rec.name or rec.id), "Marked Keep so it won't sell again", rec.id, rec.count)
+      D:Log("Bought back " .. tostring(rec.name or rec.id), "Marked Keep so it won't sell again", rec.id, rec.count)
       return true
     end
   end
@@ -206,30 +206,30 @@ end
 
 ---Repairs from the player's own gold, if the rule is on and it can be afforded.
 local function repair()
-  if not P.db.rules.repair or not P.Global("CanMerchantRepair") then return end
-  local cost, can = P.Global("GetRepairAllCost")
+  if not D.db.rules.repair or not D.Global("CanMerchantRepair") then return end
+  local cost, can = D.Global("GetRepairAllCost")
   if not cost or cost <= 0 or can == false then return end
-  if (P.Global("GetMoney") or 0) < cost then return end
-  P.Global("RepairAllItems", false)
+  if (D.Global("GetMoney") or 0) < cost then return end
+  D.Global("RepairAllItems", false)
   visit.repaired = cost
-  P:Log("Repaired", P.Money(cost), nil, nil, -cost)
+  D:Log("Repaired", D.Money(cost), nil, nil, -cost)
 end
 
 ---What this vendor could supply from the carry list: { { index, id, count, cost } }, within the cap.
 function Vendor:BuyPlan()
   local plan = {}
-  local budget = (P.db.buyCap or 0) - (visit and visit.spent or 0)
+  local budget = (D.db.buyCap or 0) - (visit and visit.spent or 0)
   local count = {}
-  P.Each(P.Carried(), function(_, _, info)
+  D.Each(D.Carried(), function(_, _, info)
     count[info.itemID] = (count[info.itemID] or 0) + (info.stackCount or 1)
   end)
-  for _, want in ipairs(P:Me().carry) do
+  for _, want in ipairs(D:Me().carry) do
     local short = (want.want or 0) - (count[want.id] or 0)
     if short > 0 then
-      for index = 1, P.Global("GetMerchantNumItems") or 0 do
-        local id = P.Global("GetMerchantItemID", index)
+      for index = 1, D.Global("GetMerchantNumItems") or 0 do
+        local id = D.Global("GetMerchantItemID", index)
         if id == want.id then
-          local info = P.In("C_MerchantFrame", "GetItemInfo", index)
+          local info = D.In("C_MerchantFrame", "GetItemInfo", index)
           if type(info) == "table" and info.isPurchasable ~= false and not info.hasExtendedCost and (info.price or 0) > 0 then
             local per = math.max(1, info.stackCount or 1)
             local available = (info.numAvailable or -1) >= 0 and info.numAvailable * per or math.huge
@@ -251,46 +251,46 @@ end
 
 ---Buys what the plan says, in batches the merchant's stack size allows.
 local function buy()
-  if not P.db.rules.buy then return end
+  if not D.db.rules.buy then return end
   for _, item in ipairs(Vendor:BuyPlan()) do
-    if (P.Global("GetMoney") or 0) < item.cost then return end
-    local maxStack = P.Global("GetMerchantItemMaxStack", item.index) or item.count
+    if (D.Global("GetMoney") or 0) < item.cost then return end
+    local maxStack = D.Global("GetMerchantItemMaxStack", item.index) or item.count
     local left = item.count
     while left > 0 do
       local n = math.min(left, math.max(1, maxStack))
-      P.Global("BuyMerchantItem", item.index, n)
+      D.Global("BuyMerchantItem", item.index, n)
       left = left - n
     end
     visit.spent = visit.spent + item.cost
     visit.bought = visit.bought + 1
-    P:Log("Bought " .. tostring(item.name or item.id), "On your carry list, up to your cap", item.id, item.count, -item.cost)
+    D:Log("Bought " .. tostring(item.name or item.id), "On your carry list, up to your cap", item.id, item.count, -item.cost)
   end
 end
 
-Core:On("MERCHANT_SHOW", "providence.vendor", function()
+Core:On("MERCHANT_SHOW", "dimension.vendor", function()
   open = true
   visit = { sold = {}, value = 0, spent = 0, bought = 0 }
-  if not P.db or P.PauseReason() then
-    P:Changed()
+  if not D.db or D.PauseReason() then
+    D:Changed()
     return
   end
   local other = Vendor.OtherSeller()
   if other and not Vendor.noted then
     Vendor.noted = true
-    P:Print(other .. " is already selling here, so I'll leave selling to it. Turn its auto-sell off to use mine.")
+    D:Print(other .. " is already selling here, so I'll leave selling to it. Turn its auto-sell off to use mine.")
   end
   repair()
   buy()
-  if P.db.rules.autoSell and not other then Vendor:Sell() end
-  P:Changed()
+  if D.db.rules.autoSell and not other then Vendor:Sell() end
+  D:Changed()
 end)
-Core:On("MERCHANT_CLOSED", "providence.vendor", function()
+Core:On("MERCHANT_CLOSED", "dimension.vendor", function()
   open = false
   run = nil
   wipe(pending)   -- with the vendor gone, an item back in that slot says nothing about the sale
   if visit and visit.value > 0 then
-    P:Print(string.format("Sold %d %s for %s. /prov shows what and why.", #visit.sold, #visit.sold == 1 and "stack" or "stacks", P.Money(visit.value)))
+    D:Print(string.format("Sold %d %s for %s. /dim shows what and why.", #visit.sold, #visit.sold == 1 and "stack" or "stacks", D.Money(visit.value)))
   end
-  P:Changed()
+  D:Changed()
 end)
 Vendor.BUYBACK_SLOTS = BUYBACK_SLOTS

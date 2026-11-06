@@ -1,16 +1,16 @@
--- Providence's window (design/suite/providence.html): Make room, Rules, Carry & stash, Places and
+-- Dimension's window (design/suite/dimension.html): Make room, Rules, Carry & stash, Places and
 -- History, plus the first-run presets. Panels at a vendor and the bank are in panels.lua and share
 -- the row list made here.
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 local UI = Core.UI
 local C = UI.C
 
 local Window = {}
-P.Window = Window
-local Rules, Room, Tidy, Vendor = P.Rules, P.Room, P.Tidy, P.Vendor
+D.Window = Window
+local Rules, Room, Tidy, Vendor = D.Rules, D.Room, D.Tidy, D.Vendor
 
 local W, H = 780, 580
 local ROW_H = 38
@@ -26,7 +26,7 @@ local FOOTERS = {
   rules = "Hover any item and press your Mark key to cycle Junk, Keep, none. Set it in Key Bindings",
   carry = "Lists belong to this character",
   places = "Left-click a slot to pin what's in it · right-click to cycle Junk, Keep, none",
-  history = "Everything Providence did for this character, kept for 30 days",
+  history = "Everything Dimension did for this character, kept for 30 days",
 }
 
 local win
@@ -73,7 +73,7 @@ end
 
 local function updateRow(row, item)
   if item.id then
-    row.icon:SetTexture(P.In("C_Item", "GetItemIconByID", item.id) or 134400)
+    row.icon:SetTexture(D.In("C_Item", "GetItemIconByID", item.id) or 134400)
     row.icon:Show()
   else
     row.icon:Hide()
@@ -139,11 +139,11 @@ local itemName = Window.ItemName
 -------------------------------------------------------------------------------------------
 
 local function destroyAction(entry)
-  local on = P.db.rules.destroy
+  local on = D.db.rules.destroy
   return { text = "Destroy", width = 62, off = not on, tip = on and "Destroys this stack, for good. One click per stack: the game allows no less." or "Off until you switch it on in Rules.",
     run = function()
       local ok, why = Room:Destroy(entry.bag, entry.slot, entry.id)
-      if not ok then P:Print("Not destroyed: " .. tostring(why) .. ".") end
+      if not ok then D:Print("Not destroyed: " .. tostring(why) .. ".") end
       Window:Refresh()
     end }
 end
@@ -166,20 +166,20 @@ local function fillRoom(f)
     items[#items + 1] = { group = "Costs nothing" }
     items[#items + 1] = { title = "Merge partial stacks and put things in their bags", sub = "Nothing leaves your bags",
       right = list.slots > 0 and string.format("+%d %s", list.slots, list.slots == 1 and "slot" or "slots") or "",
-      actions = { { text = "Do it", off = P.PauseReason() ~= nil or P.Mover:Active(), tip = P.PauseReason(), run = function() Room:FreeWithoutCost() end } } }
+      actions = { { text = "Do it", off = D.PauseReason() ~= nil or D.Mover:Active(), tip = D.PauseReason(), run = function() Room:FreeWithoutCost() end } } }
   end
   if #list.sell > 0 then
     items[#items + 1] = { group = "Goes at the next vendor" }
     for _, e in ipairs(list.sell) do
-      items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""), sub = e.why, right = P.Money(e.value),
-        actions = { { text = "Keep it", run = function() P.db.itemMarks[e.id] = "keep" P:Changed() end } } }
+      items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""), sub = e.why, right = D.Money(e.value),
+        actions = { { text = "Keep it", run = function() D.db.itemMarks[e.id] = "keep" D:Changed() end } } }
     end
   end
   if #list.toss > 0 then
     items[#items + 1] = { group = "Cheapest things no rule wants" }
     for _, e in ipairs(list.toss) do
-      items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""), sub = "Worth little. That's only an opinion", right = P.Money(e.value),
-        actions = { destroyAction(e), { text = "Mark Junk", width = 72, run = function() P.db.itemMarks[e.id] = "junk" P:Changed() end } } }
+      items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""), sub = "Worth little. That's only an opinion", right = D.Money(e.value),
+        actions = { destroyAction(e), { text = "Mark Junk", width = 72, run = function() D.db.itemMarks[e.id] = "junk" D:Changed() end } } }
     end
   end
   if #items == 0 then items[1] = { title = "Nothing cheap to clear", sub = "Everything left is something a rule wants kept" } end
@@ -191,9 +191,9 @@ end
 -------------------------------------------------------------------------------------------
 
 local function rule(list, key, label, desc)
-  list:Toggle(label, desc, function() return P.db.rules[key] end, function(on)
-    P.db.rules[key] = on
-    P:Changed()
+  list:Toggle(label, desc, function() return D.db.rules[key] end, function(on)
+    D.db.rules[key] = on
+    D:Changed()
   end)
 end
 
@@ -241,10 +241,10 @@ local function dropSlot(parent, onItem)
   back:SetPoint("TOPLEFT", 1, -1)
   back:SetPoint("BOTTOMRIGHT", -1, 1)
   local add = function()
-    local kind, id = P.Global("GetCursorInfo")
+    local kind, id = D.Global("GetCursorInfo")
     if kind == "item" and id then
       onItem(id)
-      P.Global("ClearCursor")
+      D.Global("ClearCursor")
     end
   end
   b:SetScript("OnReceiveDrag", add)
@@ -259,17 +259,17 @@ local function dropSlot(parent, onItem)
 end
 
 function Window.AddCarry(id)
-  local carry = P:Me().carry
+  local carry = D:Me().carry
   for _, c in ipairs(carry) do
     if c.id == id then return end
   end
   carry[#carry + 1] = { id = id, want = math.max(CARRY_STEP, Room.MaxStack(id) or 1) }
-  P:Changed()
+  D:Changed()
 end
 
 function Window.AddStash(id)
-  P:Me().stash[id] = true
-  P:Changed()
+  D:Me().stash[id] = true
+  D:Changed()
 end
 
 local function column(f, title, note, anchorRight, onItem)
@@ -305,8 +305,8 @@ local function buildCarry(f)
   local anchor
   for _, spec in ipairs({ { "trade", "All trade goods" }, { "recipe", "All recipes" } }) do
     local chip = UI.Chip(f.stash, spec[2], nil, function(on)
-      P:Me().stashKinds[spec[1]] = on or nil
-      P:Changed()
+      D:Me().stashKinds[spec[1]] = on or nil
+      D:Changed()
     end)
     chip:SetPoint("BOTTOMLEFT", anchor or f.stash, anchor and "BOTTOMRIGHT" or "BOTTOMLEFT", anchor and 6 or 0, 0)
     anchor = chip
@@ -318,17 +318,17 @@ local function buildCarry(f)
 end
 
 local function fillCarry(f)
-  local me = P:Me()
+  local me = D:Me()
   local have = {}
-  P.Each(P.Carried(), function(_, _, info) have[info.itemID] = (have[info.itemID] or 0) + (info.stackCount or 1) end)
+  D.Each(D.Carried(), function(_, _, info) have[info.itemID] = (have[info.itemID] or 0) + (info.stackCount or 1) end)
   local carry = {}
   for i, c in ipairs(me.carry) do
     local got = have[c.id] or 0
     carry[#carry + 1] = { id = c.id, title = itemName(c.id), sub = string.format("Want %d, have %d", c.want, got),
       actions = {
-        { text = "x", width = 22, tip = "Take it off the list", run = function() table.remove(me.carry, i) P:Changed() end },
-        { text = "+", width = 22, run = function() c.want = c.want + CARRY_STEP P:Changed() end },
-        { text = "-", width = 22, run = function() c.want = math.max(1, c.want - CARRY_STEP) P:Changed() end },
+        { text = "x", width = 22, tip = "Take it off the list", run = function() table.remove(me.carry, i) D:Changed() end },
+        { text = "+", width = 22, run = function() c.want = c.want + CARRY_STEP D:Changed() end },
+        { text = "-", width = 22, run = function() c.want = math.max(1, c.want - CARRY_STEP) D:Changed() end },
       } }
   end
   if #carry == 0 then carry[1] = { title = "Nothing yet", sub = "Drop an item on the slot above" } end
@@ -336,7 +336,7 @@ local function fillCarry(f)
   local stash = {}
   for id in pairs(me.stash) do
     stash[#stash + 1] = { id = id, title = itemName(id), sub = string.format("%d on you", have[id] or 0),
-      actions = { { text = "x", width = 22, tip = "Take it off the list", run = function() me.stash[id] = nil P:Changed() end } } }
+      actions = { { text = "x", width = 22, tip = "Take it off the list", run = function() me.stash[id] = nil D:Changed() end } } }
   end
   table.sort(stash, function(a, b) return a.title < b.title end)
   if #stash == 0 then stash[1] = { title = "Nothing yet", sub = "Drop an item on the slot above" } end
@@ -365,7 +365,7 @@ local function gridTile(f)
   b.sell:SetPoint("TOPLEFT", 1, -1)
   b.keep = UI.Icon(b, "check", 11, { .56, .88, .56 }, "OVERLAY")
   b.keep:SetPoint("TOPLEFT", 1, -1)
-  b.pin = UI.Icon(b, "chevron", 11, UI.Accent("providence"), "OVERLAY")
+  b.pin = UI.Icon(b, "chevron", 11, UI.Accent("dimension"), "OVERLAY")
   b.pin:SetPoint("TOPRIGHT", -1, -1)
   b:SetScript("OnClick", function(self, button)
     if button == "RightButton" then
@@ -404,7 +404,7 @@ local function buildPlaces(f)
   end
   local options = {}
   for _, role in ipairs(Tidy.ROLES) do options[#options + 1] = { role.key, role.label } end
-  for _, entry in ipairs(P.Carried()) do
+  for _, entry in ipairs(D.Carried()) do
     local bag = entry.id
     if bag ~= 0 and not entry.reagent and Tidy.HasRoles() then
       list:Dropdown(entry.name, nil, options, function() return Tidy.Role(bag) end, function(v) Tidy.SetRole(bag, v) end)
@@ -416,17 +416,17 @@ end
 
 local function fillPlaces(f)
   local n, step = 0, GRID_TILE + GRID_GAP
-  for _, entry in ipairs(P.Carried()) do
-    for slot = 1, P.Size(entry.id) do
+  for _, entry in ipairs(D.Carried()) do
+    for slot = 1, D.Size(entry.id) do
       n = n + 1
       local tile = f.tiles[n] or gridTile(f)
       f.tiles[n] = tile
       tile.bag, tile.slot = entry.id, slot
-      local info = P.Read(entry.id, slot)
+      local info = D.Read(entry.id, slot)
       tile.id = info and info.itemID
       tile.icon:SetTexture(info and info.iconFileID or nil)
       tile.icon:SetShown(info ~= nil)
-      local mark, pinned = P.Overlay.MarkOf(entry.id, slot, info)
+      local mark, pinned = D.Overlay.MarkOf(entry.id, slot, info)
       tile.sell:SetShown(mark == "sell")
       tile.keep:SetShown(mark == "keep")
       tile.pin:SetShown(pinned and true or false)
@@ -445,7 +445,7 @@ end
 -------------------------------------------------------------------------------------------
 
 local function ago(at)
-  local seconds = math.max(0, P.Now() - (at or 0))
+  local seconds = math.max(0, D.Now() - (at or 0))
   if seconds < 60 then return "just now" end
   if seconds < 3600 then return math.floor(seconds / 60) .. "m ago" end
   if seconds < 86400 then return math.floor(seconds / 3600) .. "h ago" end
@@ -463,16 +463,16 @@ local function fillHistory(f)
   if Vendor:IsOpen() and visit and #visit.sold > 0 then
     items[#items + 1] = { group = "Can still be bought back" }
     for _, rec in ipairs(visit.sold) do
-      items[#items + 1] = { id = rec.id, link = rec.link, title = itemName(rec.id, rec.name) .. (rec.count > 1 and (" × " .. rec.count) or ""), sub = rec.why, right = P.Money(rec.value),
+      items[#items + 1] = { id = rec.id, link = rec.link, title = itemName(rec.id, rec.name) .. (rec.count > 1 and (" × " .. rec.count) or ""), sub = rec.why, right = D.Money(rec.value),
         actions = { { text = "Buy back", width = 72, run = function() Vendor:Undo(rec) end } } }
     end
     items[#items + 1] = { group = "All of it" }
   end
-  for _, h in ipairs(P:Me().history) do
-    local value = h.value and (h.value < 0 and ("-" .. P.Money(-h.value)) or P.Money(h.value)) or ""
+  for _, h in ipairs(D:Me().history) do
+    local value = h.value and (h.value < 0 and ("-" .. D.Money(-h.value)) or D.Money(h.value)) or ""
     items[#items + 1] = { id = h.id, title = h.what .. ((h.count or 0) > 1 and (" × " .. h.count) or ""), sub = (h.detail or "") .. "  ·  " .. ago(h.at), right = value }
   end
-  if #items == 0 then items[1] = { title = "Nothing yet", sub = "What Providence does shows up here" } end
+  if #items == 0 then items[1] = { title = "Nothing yet", sub = "What Dimension does shows up here" } end
   f.list:SetData(items, true)
 end
 
@@ -487,7 +487,7 @@ panes.history = { build = buildHistory, fill = fillHistory }
 -------------------------------------------------------------------------------------------
 
 local function fillPane()
-  local key = P.db.tab or "rules"
+  local key = D.db.tab or "rules"
   for k, p in pairs(panes) do
     if p.frame then p.frame:SetShown(k == key) end
   end
@@ -500,40 +500,40 @@ local function fillPane()
   p.frame:Show()
   p.fill(p.frame)
   win.footerText:SetText(FOOTERS[key] or "")
-  local free, total = P.FreeSlots()
+  local free, total = D.FreeSlots()
   win:SetSub(string.format("%d of %d slots free", free, total))
 end
 
 local function build()
-  win = UI.Window({ name = "ProvidenceWindow", addon = "providence", title = "Providence", width = W, height = H, footer = true })
-  win:SetAccent("providence")
+  win = UI.Window({ name = "DimensionWindow", addon = "dimension", title = "Dimension", width = W, height = H, footer = true })
+  win:SetAccent("dimension")
   win:Hide()
   win.tabs = UI.Tabs(win.body, TABS, function(key)
-    P.db.tab = key
+    D.db.tab = key
     fillPane()
   end)
   win.tabs:SetPoint("TOPLEFT")
   win.tabs:SetPoint("TOPRIGHT")
-  win.tabs:ApplyAccent(UI.Accent("providence"))
+  win.tabs:ApplyAccent(UI.Accent("dimension"))
   win.paneArea = CreateFrame("Frame", nil, win.body)
   win.paneArea:SetPoint("TOPLEFT", win.tabs, "BOTTOMLEFT", 14, -10)
   win.paneArea:SetPoint("BOTTOMRIGHT", -14, 10)
-  win.gear = UI.Button(win.footer, "Settings", "quiet", function() P:OpenSettings() end)
+  win.gear = UI.Button(win.footer, "Settings", "quiet", function() D:OpenSettings() end)
   win.gear:SetHeight(20)
   win.gear:SetPoint("RIGHT", -12, 0)
 end
 
 function Window:Get()
-  if not win and P.db then build() end
+  if not win and D.db then build() end
   return win
 end
 
 ---Opens on a tab, or where it was.
 function Window:Open(tab)
   if not self:Get() then return end
-  if tab then P.db.tab = tab end
-  P.db.tab = P.db.tab or "rules"
-  win.tabs:Select(P.db.tab, true)
+  if tab then D.db.tab = tab end
+  D.db.tab = D.db.tab or "rules"
+  win.tabs:Select(D.db.tab, true)
   win:Show()
   fillPane()
 end
@@ -556,8 +556,8 @@ local welcome
 
 function Window:ShowWelcome()
   if not welcome then
-    welcome = UI.Window({ name = "ProvidenceWelcome", addon = "providence", title = "Providence", sub = "Your bags, looked after", width = 660, height = 280 })
-    welcome:SetAccent("providence")
+    welcome = UI.Window({ name = "DimensionWelcome", addon = "dimension", title = "Dimension", sub = "Your bags, looked after", width = 660, height = 280 })
+    welcome:SetAccent("dimension")
     welcome:Hide()
     local lead = UI.Text(welcome.body, "body", 14, C.muted)
     lead:SetPoint("TOPLEFT", 14, -12)
@@ -567,7 +567,7 @@ function Window:ShowWelcome()
     welcome.cards = {}
     for i, spec in ipairs(PRESET_CARDS) do
       local card = UI.Button(welcome.body, spec.title, i == 2 and "accent" or "quiet", function()
-        P:ApplyPreset(spec.key)
+        D:ApplyPreset(spec.key)
         welcome:Hide()
       end)
       card:SetSize(200, 26)
@@ -580,12 +580,12 @@ function Window:ShowWelcome()
       welcome.cards[spec.key] = card
     end
     -- closing it is an answer too: nothing automatic
-    welcome:HookScript("OnHide", function() P.db.first = false end)
+    welcome:HookScript("OnHide", function() D.db.first = false end)
     Window.welcome = welcome
   end
   welcome:Show()
 end
 
 Core:OnLogin(function()
-  if P.db and P.db.first then Core:NextFrame(function() Window:ShowWelcome() end, "providence.welcome") end
+  if D.db and D.db.first then Core:NextFrame(function() Window:ShowWelcome() end, "dimension.welcome") end
 end)

@@ -1,14 +1,14 @@
 <Bindings>
-  <Binding name="PROVIDENCE_TOGGLE" header="PROVIDENCE" category="ADDONS">
-    Providence:Toggle()
+  <Binding name="DIMENSION_TOGGLE" header="DIMENSION" category="ADDONS">
+    Dimension:Toggle()
   </Binding>
-  <Binding name="PROVIDENCE_MARK" category="ADDONS">
-    Providence.Overlay:MarkHovered()
+  <Binding name="DIMENSION_MARK" category="ADDONS">
+    Dimension.Overlay:MarkHovered()
   </Binding>
-  <Binding name="PROVIDENCE_PIN" category="ADDONS">
-    Providence.Overlay:PinHovered()
+  <Binding name="DIMENSION_PIN" category="ADDONS">
+    Dimension.Overlay:PinHovered()
   </Binding>
-  <Binding name="PROVIDENCE_TIDY" category="ADDONS">
-    Providence.Tidy:Run()
+  <Binding name="DIMENSION_TIDY" category="ADDONS">
+    Dimension.Tidy:Run()
   </Binding>
 </Bindings>

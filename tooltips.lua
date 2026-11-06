@@ -1,21 +1,21 @@
--- One line on the tooltip of anything you're carrying that Providence has an opinion on: what will
+-- One line on the tooltip of anything you're carrying that Dimension has an opinion on: what will
 -- happen to it and why. "Left alone" isn't worth a line.
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 
 local Tips = {}
-P.Tips = Tips
-local Rules = P.Rules
+D.Tips = Tips
+local Rules = D.Rules
 
 local WORDS = { sell = "Sells at the next vendor", keep = "Kept" }
 
 ---verdict, why for an item on the player, judged on the copy they hold; nil if they hold none.
 function Tips.About(id)
-  if not P.db then return nil end
+  if not D.db then return nil end
   local verdict, why
-  P.Each(P.Carried(), function(bag, slot, info)
+  D.Each(D.Carried(), function(bag, slot, info)
     if info.itemID == id then
       verdict, why = Rules:Verdict(id, info, bag, slot)
       return true
@@ -25,11 +25,11 @@ function Tips.About(id)
 end
 
 function Tips:AddItem(tt, id)
-  if not P.db.tooltips then return 0 end
+  if not D.db.tooltips then return 0 end
   local verdict, why = Tips.About(id)
   if not (verdict and WORDS[verdict]) then return 0 end
-  local a = Core.UI.Accent("providence")
-  tt:AddLine("Providence: " .. WORDS[verdict], a[1], a[2], a[3])
+  local a = Core.UI.Accent("dimension")
+  tt:AddLine("Dimension: " .. WORDS[verdict], a[1], a[2], a[3])
   tt:AddLine(why, .8, .8, .8)
   return 2
 end

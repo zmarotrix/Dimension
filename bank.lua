@@ -3,12 +3,12 @@
 -- it touches it, so anything that changed in between is skipped, not misplaced.
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 
 local Bank = {}
-P.Bank = Bank
-local Rules, Mover = P.Rules, P.Mover
+D.Bank = Bank
+local Rules, Mover = D.Rules, D.Mover
 
 local open = false
 Bank.lastResult = nil
@@ -21,19 +21,19 @@ local function chooser(containers)
   local free, taken = {}, {}
   for _, entry in ipairs(containers) do
     local list = {}
-    for slot = 1, P.Size(entry.id) do
-      if not P.Read(entry.id, slot) then list[#list + 1] = slot end
+    for slot = 1, D.Size(entry.id) do
+      if not D.Read(entry.id, slot) then list[#list + 1] = slot end
     end
     free[#free + 1] = { entry = entry, slots = list }
   end
   return function(id, count)
-    local family = P.In("C_Item", "GetItemFamily", id)
+    local family = D.In("C_Item", "GetItemFamily", id)
     local isReagent = Rules.Facts(id).reagent
-    local size = P.Room.MaxStack(id) or 1
+    local size = D.Room.MaxStack(id) or 1
     -- first a stack of the same thing with room for all of it
     for _, entry in ipairs(containers) do
-      for slot = 1, P.Size(entry.id) do
-        local info = P.Read(entry.id, slot)
+      for slot = 1, D.Size(entry.id) do
+        local info = D.Read(entry.id, slot)
         local key = entry.id .. ":" .. slot
         if info and info.itemID == id and not taken[key] and (info.stackCount or 1) + count <= size then
           taken[key] = true
@@ -42,7 +42,7 @@ local function chooser(containers)
       end
     end
     for _, place in ipairs(free) do
-      if #place.slots > 0 and P.Room.Accepts(place.entry, id, family, isReagent) then
+      if #place.slots > 0 and D.Room.Accepts(place.entry, id, family, isReagent) then
         return place.entry.id, table.remove(place.slots, 1)
       end
     end
@@ -51,13 +51,13 @@ end
 
 ---{ take = { {from, to, id, count} }, put = { ... }, noRoom = n } for this character's lists.
 function Bank:Plan()
-  local me = P:Me()
-  local carried, bank = P.Carried(), Core.Bags:BankList("Character")
+  local me = D:Me()
+  local carried, bank = D.Carried(), Core.Bags:BankList("Character")
   local take, put, noRoom = {}, {}, 0
   local intoBags, intoBank = chooser(carried), chooser(bank)
 
   local have = {}
-  P.Each(carried, function(_, _, info)
+  D.Each(carried, function(_, _, info)
     have[info.itemID] = (have[info.itemID] or 0) + (info.stackCount or 1)
   end)
   local onCarry = {}
@@ -65,7 +65,7 @@ function Bank:Plan()
     onCarry[want.id] = true
     local need = (want.want or 0) - (have[want.id] or 0)
     if need > 0 then
-      P.Each(bank, function(bag, slot, info)
+      D.Each(bank, function(bag, slot, info)
         if info.itemID == want.id and need > 0 and not info.isLocked then
           local count = math.min(need, info.stackCount or 1)
           local toBag, toSlot = intoBags(want.id, count)
@@ -81,7 +81,7 @@ function Bank:Plan()
     end
   end
 
-  P.Each(carried, function(bag, slot, info)
+  D.Each(carried, function(bag, slot, info)
     local id = info.itemID
     if not onCarry[id] and not info.isLocked and not me.pins[bag .. ":" .. slot] then
       -- naming an item always counts; a whole kind never takes what a quest in the log wants
@@ -111,25 +111,25 @@ function Bank:Run()
   return Mover:Run(moves, { label = "Bank trip", bank = true, onDone = function(reason, moved, skipped)
     Bank.lastResult = { reason = reason, moved = moved, skipped = skipped }
     if moved > 0 then
-      P:Log("Bank trip", string.format("%d moves%s%s", moved, skipped > 0 and (", " .. skipped .. " skipped") or "", reason and (": " .. reason) or ""))
+      D:Log("Bank trip", string.format("%d moves%s%s", moved, skipped > 0 and (", " .. skipped .. " skipped") or "", reason and (": " .. reason) or ""))
     end
-    if not reason and P.db.rules.tidyAfter and P.Tidy then P.Tidy:Run() end
+    if not reason and D.db.rules.tidyAfter and D.Tidy then D.Tidy:Run() end
   end })
 end
 
-Core:On("BANKFRAME_OPENED", "providence.bank", function()
+Core:On("BANKFRAME_OPENED", "dimension.bank", function()
   open = true
   Bank.lastResult = nil
-  if P.db and P.db.rules.autoBank and not P.PauseReason() then
+  if D.db and D.db.rules.autoBank and not D.PauseReason() then
     -- the bank's contents arrive a frame later than the event
-    Core:NextFrame(function() Bank:Run() end, "providence.bank")
+    Core:NextFrame(function() Bank:Run() end, "dimension.bank")
   end
-  P:Changed()
+  D:Changed()
 end)
-Core:On("BANKFRAME_CLOSED", "providence.bank", function()
+Core:On("BANKFRAME_CLOSED", "dimension.bank", function()
   open = false
-  P:Changed()
+  D:Changed()
 end)
 for _, event in ipairs({ "PLAYERBANKSLOTS_CHANGED", "BANK_TABS_CHANGED" }) do
-  Core:On(event, "providence.bank", function() if open then P:Changed() end end)
+  Core:On(event, "dimension.bank", function() if open then D:Changed() end end)
 end

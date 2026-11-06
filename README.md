@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/banner.png" alt="Providence: your bags, looked after. Powered by NorgannonDB." width="100%">
+  <img src=".github/banner.png" alt="Dimension: your bags, looked after. Powered by NorgannonDB." width="100%">
 </p>
 
 <p align="center">
@@ -10,9 +10,9 @@
 
 > [!WARNING]
 > **Very much a work in progress.** This first build has passed its test harness but hasn't been
-> played in the game yet, so expect things to need fixing. `/prov probe` tests what your client allows.
+> played in the game yet, so expect things to need fixing. `/dim probe` tests what your client allows.
 
-**Providence looks after your bags, and can always say why it did something.** It sells what's safe, frees
+**Dimension looks after your bags, and can always say why it did something.** It sells what's safe, frees
 space when bags fill up, runs bank trips and keeps things in their places. It adds to the game's own bags
 rather than replacing them.
 
@@ -51,7 +51,7 @@ mid-sale can't make you drink the potion.
 
 ## Commands
 
-`/prov` opens the window. `/prov tidy`, `/prov room`, `/prov settings`, and `/prov probe [sell | move | sort]`.
+`/dim` opens the window. `/dim tidy`, `/dim room`, `/dim settings`, and `/dim probe [sell | move | sort]`.
 Key bindings for opening, marking, pinning and tidying are in the game's Key Bindings, under AddOns.
 
 ## Needs

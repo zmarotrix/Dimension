@@ -8,11 +8,11 @@
 -- just closed, while placing onto a closed bank fails and the item goes back.
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 
 local Mover = {}
-P.Mover = Mover
+D.Mover = Mover
 
 local TICK = .05             -- seconds between looks while a job runs
 local START_BATCH, MAX_BATCH = 4, 12
@@ -27,7 +27,7 @@ local elapsed = 0
 local function slotKey(bag, slot) return bag .. ":" .. slot end
 
 local function isLocked(bag, slot)
-  local info = P.Read(bag, slot)
+  local info = D.Read(bag, slot)
   return info and info.isLocked
 end
 
@@ -38,9 +38,9 @@ local function finish(reason)
   if not done then return end
   local seconds = GetTime() - done.started
   if done.moved > 0 and seconds > 0 then
-    P.db.probe.mover = { moves = done.moved, seconds = seconds, batch = done.batch, at = P.Now() }
+    D.db.probe.mover = { moves = done.moved, seconds = seconds, batch = done.batch, at = D.Now() }
   end
-  P:Changed()
+  D:Changed()
   if done.onDone then Core.SafeCall(done.onDone, reason, done.moved, done.skipped) end
 end
 
@@ -50,7 +50,7 @@ end
 function Mover:Run(moves, opts)
   if job then return false end
   opts = opts or {}
-  job = { queue = {}, inflight = {}, batch = P.db.moverBatch or START_BATCH, moved = 0, skipped = 0, total = #moves,
+  job = { queue = {}, inflight = {}, batch = D.db.moverBatch or START_BATCH, moved = 0, skipped = 0, total = #moves,
     started = GetTime(), label = opts.label, bank = opts.bank, onDone = opts.onDone }
   for i, move in ipairs(moves) do job.queue[i] = move end
   elapsed = TICK
@@ -75,19 +75,19 @@ end
 local function startMove(move, used)
   local fromBag, fromSlot, toBag, toSlot = move.from[1], move.from[2], move.to[1], move.to[2]
   if used[slotKey(fromBag, fromSlot)] or used[slotKey(toBag, toSlot)] then return nil end
-  local source = P.Read(fromBag, fromSlot)
+  local source = D.Read(fromBag, fromSlot)
   if not source or source.itemID ~= move.id then return false end   -- it isn't there any more
   if source.isLocked or isLocked(toBag, toSlot) then return nil end
   if move.count and move.count < (source.stackCount or 1) then
-    P.In("C_Container", "SplitContainerItem", fromBag, fromSlot, move.count)
+    D.In("C_Container", "SplitContainerItem", fromBag, fromSlot, move.count)
   else
-    P.In("C_Container", "PickupContainerItem", fromBag, fromSlot)
+    D.In("C_Container", "PickupContainerItem", fromBag, fromSlot)
   end
-  if not P.CursorBusy() then return false end
-  P.In("C_Container", "PickupContainerItem", toBag, toSlot)
+  if not D.CursorBusy() then return false end
+  D.In("C_Container", "PickupContainerItem", toBag, toSlot)
   -- still holding it means the target refused: it goes straight back to where it was
-  if P.CursorBusy() then
-    P.Global("ClearCursor")
+  if D.CursorBusy() then
+    D.Global("ClearCursor")
     return false
   end
   used[slotKey(fromBag, fromSlot)] = true
@@ -118,18 +118,18 @@ end
 
 local function tick()
   if not job then return end
-  local reason = P.PauseReason()
+  local reason = D.PauseReason()
   if reason then
     job.paused = reason
-    P:Changed()
+    D:Changed()
     return
   end
   if job.paused then
     job.paused = nil
-    P:Changed()
+    D:Changed()
   end
   if stillMoving() then return end
-  if P.CursorBusy() then return end   -- the player is dragging something; wait for them
+  if D.CursorBusy() then return end   -- the player is dragging something; wait for them
   if #job.queue == 0 then
     finish(nil)
     return
@@ -152,8 +152,8 @@ local function tick()
     end
   end
   job.lastBatch = sent
-  P.db.moverBatch = job.batch
-  P:Changed()
+  D.db.moverBatch = job.batch
+  D:Changed()
 end
 
 frame:SetScript("OnUpdate", function(_, dt)
@@ -165,12 +165,12 @@ frame:SetScript("OnUpdate", function(_, dt)
 end)
 
 -- an error while moving means too fast: slow down rather than guess a rate
-Core:On("UI_ERROR_MESSAGE", "providence.mover", function()
+Core:On("UI_ERROR_MESSAGE", "dimension.mover", function()
   if job then
     job.complained = true
     job.batch = math.max(1, math.floor(job.batch / 2))
   end
 end)
-Core:On("BANKFRAME_CLOSED", "providence.mover", function()
+Core:On("BANKFRAME_CLOSED", "dimension.mover", function()
   if job and job.bank then Mover:Cancel("the bank closed") end
 end)

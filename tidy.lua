@@ -3,12 +3,12 @@
 -- ourselves. Bag roles are the game's own filters, so looted items go there by themselves.
 
 local Core = NorgannonCore
-local P = Providence
-if P.disabled then return end
+local D = Dimension
+if D.disabled then return end
 
 local Tidy = {}
-P.Tidy = Tidy
-local Mover = P.Mover
+D.Tidy = Tidy
+local Mover = D.Mover
 
 local SETTLE = 1            -- quiet seconds after the last bag change before pins go back
 local SORT_TIMEOUT = 8      -- seconds to wait for a sort the game never finishes
@@ -29,14 +29,14 @@ function Tidy:Sorting() return waiting ~= nil end
 ---Moves that put each pinned item back in its slot. An item already in another pinned slot stays,
 ---and a pin whose item isn't in the bags just waits.
 function Tidy:PinPlan()
-  local pins = P:Me().pins
+  local pins = D:Me().pins
   local moves = {}
   local claimed = {}
   for key, id in pairs(pins) do
     local bag, slot = key:match("^(-?%d+):(%d+)$")
     bag, slot = tonumber(bag), tonumber(slot)
     if bag then
-      local here = P.Read(bag, slot)
+      local here = D.Read(bag, slot)
       if here and here.itemID == id then claimed[key] = true end
     end
   end
@@ -44,9 +44,9 @@ function Tidy:PinPlan()
     if not claimed[key] then
       local bag, slot = key:match("^(-?%d+):(%d+)$")
       bag, slot = tonumber(bag), tonumber(slot)
-      if bag and slot <= P.Size(bag) then
+      if bag and slot <= D.Size(bag) then
         local fromBag, fromSlot
-        P.Each(P.Carried(), function(b, s, info)
+        D.Each(D.Carried(), function(b, s, info)
           local k = b .. ":" .. s
           if info.itemID == id and not claimed[k] and pins[k] ~= id then
             fromBag, fromSlot = b, s
@@ -74,29 +74,29 @@ local function restorePins(reportDone)
 end
 
 local function done()
-  P:Log("Tidied your bags", "The game's sort, then pinned items put back")
-  P:Print(DONE_LINE)
+  D:Log("Tidied your bags", "The game's sort, then pinned items put back")
+  D:Print(DONE_LINE)
 end
 
 ---Tidies. False with a reason if it can't run now.
 function Tidy:Run()
-  local reason = P.PauseReason()
+  local reason = D.PauseReason()
   if reason then
-    P:Print("Not now: " .. reason .. ".")
+    D:Print("Not now: " .. reason .. ".")
     return false, reason
   end
-  if P.CursorBusy() then return false, "you're holding an item" end
+  if D.CursorBusy() then return false, "you're holding an item" end
   if Mover:Active() or waiting then return false, "something else is moving" end
   local sort = rawget(_G, "C_Container") and C_Container.SortBags
   if not sort then
-    P:Print("This client has no bag sort, so only pinned items were put back.")
+    D:Print("This client has no bag sort, so only pinned items were put back.")
     restorePins()
     return true
   end
-  P.In("C_Container", "SortBags")
+  D.In("C_Container", "SortBags")
   waiting = { started = GetTime(), lastChange = GetTime() }
   frame:Show()
-  P:Changed()
+  D:Changed()
   return true
 end
 
@@ -109,15 +109,15 @@ frame:SetScript("OnUpdate", function(self)
   if now - waiting.lastChange >= SETTLE or now - waiting.started >= SORT_TIMEOUT then
     waiting = nil
     self:Hide()
-    if P.PauseReason() then
-      Core:AfterCombat(function() restorePins(done) end, "providence.pins")
+    if D.PauseReason() then
+      Core:AfterCombat(function() restorePins(done) end, "dimension.pins")
     else
       restorePins(done)
     end
   end
 end)
 
-Core:On("BAG_UPDATE_DELAYED", "providence.tidy", function()
+Core:On("BAG_UPDATE_DELAYED", "dimension.tidy", function()
   if waiting then waiting.lastChange = GetTime() end
 end)
 
@@ -127,17 +127,17 @@ end)
 
 ---Pins what's in a slot, or unpins the slot. Returns whether it's pinned now.
 function Tidy:TogglePin(bag, slot)
-  local pins = P:Me().pins
+  local pins = D:Me().pins
   local key = bag .. ":" .. slot
   if pins[key] then
     pins[key] = nil
-    P:Changed()
+    D:Changed()
     return false
   end
-  local info = P.Read(bag, slot)
+  local info = D.Read(bag, slot)
   if not info then return false end
   pins[key] = info.itemID
-  P:Changed()
+  D:Changed()
   return true
 end
 
@@ -152,12 +152,12 @@ end
 
 ---True if this client has bag filters at all.
 function Tidy.HasRoles()
-  return flag("ClassEquipment") ~= nil and P.In("C_Container", "GetBagSlotFlag", 1, flag("ClassEquipment")) ~= nil
+  return flag("ClassEquipment") ~= nil and D.In("C_Container", "GetBagSlotFlag", 1, flag("ClassEquipment")) ~= nil
 end
 
 function Tidy.Role(bag)
   for _, role in ipairs(Tidy.ROLES) do
-    if role.key ~= "none" and flag(role.key) and P.In("C_Container", "GetBagSlotFlag", bag, flag(role.key)) then return role.key end
+    if role.key ~= "none" and flag(role.key) and D.In("C_Container", "GetBagSlotFlag", bag, flag(role.key)) then return role.key end
   end
   return "none"
 end
@@ -165,23 +165,23 @@ end
 function Tidy.SetRole(bag, key)
   for _, role in ipairs(Tidy.ROLES) do
     if role.key ~= "none" and flag(role.key) then
-      P.In("C_Container", "SetBagSlotFlag", bag, flag(role.key), role.key == key)
+      D.In("C_Container", "SetBagSlotFlag", bag, flag(role.key), role.key == key)
     end
   end
-  P:Changed()
+  D:Changed()
 end
 
 ---"Leave this bag alone": the sort skips it, and it's the game itself that does the skipping.
 function Tidy.LeftAlone(bag)
-  if bag == 0 then return P.In("C_Container", "GetBackpackAutosortDisabled") and true or false end
-  return flag("DisableAutoSort") and P.In("C_Container", "GetBagSlotFlag", bag, flag("DisableAutoSort")) and true or false
+  if bag == 0 then return D.In("C_Container", "GetBackpackAutosortDisabled") and true or false end
+  return flag("DisableAutoSort") and D.In("C_Container", "GetBagSlotFlag", bag, flag("DisableAutoSort")) and true or false
 end
 
 function Tidy.SetLeftAlone(bag, on)
   if bag == 0 then
-    P.In("C_Container", "SetBackpackAutosortDisabled", on)
+    D.In("C_Container", "SetBackpackAutosortDisabled", on)
   elseif flag("DisableAutoSort") then
-    P.In("C_Container", "SetBagSlotFlag", bag, flag("DisableAutoSort"), on)
+    D.In("C_Container", "SetBagSlotFlag", bag, flag("DisableAutoSort"), on)
   end
-  P:Changed()
+  D:Changed()
 end
