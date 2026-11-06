@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.2, 2026-11-06
+
+- **A more compact bag window:** 14 slots across at 32 pixels each, tighter gaps, a smaller head and foot, and the search moved into the
+  head. Slots keep all their art because they're scaled, not resized.
+- **Shorter group names,** which were setting how wide small groups were: To sell, Quests, Everyday, Professions, Trade goods, Other.
+- Empty now sits on the same row as Gear and Other by default, if there's room.
+
 ## 0.11.1, 2026-11-06
 
 - **Other add-ons' marks:** the bag window now tells them when it fills a slot, so Clairvoyance's quest

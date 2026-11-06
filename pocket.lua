@@ -25,34 +25,37 @@ D.Pocket = Pocket
 local Rules, Overlay = D.Rules, D.Overlay
 
 local TEMPLATE = "ContainerFrameItemButtonTemplate"
-local COLS, TILE, GAP = 16, 37, 2
-local GROUP_GAP = 12        -- pixels between groups in a row
-local ROW_GAP = 6
+local COLS, TILE, GAP = 14, 32, 2
+local NATIVE_TILE = 37      -- the template's own size. Its textures have fixed sizes, so slots are scaled, never resized
+local TILE_SCALE = TILE / NATIVE_TILE
+local GROUP_GAP = 8         -- pixels between groups in a row
+local ROW_GAP = 3
 local WRAP_AT = 8           -- a group up to this many items stays on one line
-local ARROW = 16
+local ARROW = 14
 local MAX_ROW = 7
-local PAD = 10
-local HEADER_H = 20
-local WINDOW_HEAD, SEARCH_H, FOOT = 44, 30, 30
+local PAD = 6
+local HEADER_H = 16
+local WINDOW_HEAD, FOOT = 32, 24
+local BODY_MARGIN = 4
 local SCREEN_SHARE = .8     -- the most of the screen it takes before it scrolls
 local KEYRING = -1          -- Enum.BagIndex.Keyring: the game's own frame keeps showing it
 
 -- an item is in the first of these that claims it, wherever the groups have been moved to
 local function kind(item) return Core.Bags.Kind(item.id, 1) end
 local GROUPS = {
-  { key = "sell", label = "Sells next vendor", ours = true, row = 0, claims = function(item) return item.verdict == "sell" end },
-  { key = "quest", label = "For your quests", ours = true, row = 0, claims = function(item) return item.facts.class == Rules.CLASS_QUEST or item.questItem or Rules.QuestWants(item.id) end },
-  { key = "every", label = "Always with you", row = 0, claims = function(item) return Rules.IsEveryday(item.id) end },
+  { key = "sell", label = "To sell", ours = true, row = 0, claims = function(item) return item.verdict == "sell" end },
+  { key = "quest", label = "Quests", ours = true, row = 0, claims = function(item) return item.facts.class == Rules.CLASS_QUEST or item.questItem or Rules.QuestWants(item.id) end },
+  { key = "every", label = "Everyday", row = 0, claims = function(item) return Rules.IsEveryday(item.id) end },
   { key = "keeps", label = "Keepsakes", ours = true, row = 0, claims = function(item) return Rules.IsKeepsake(item.id, item.bound) end },
   { key = "food", label = "Food & drink", row = 1, claims = function(item) return kind(item) == "consumable" and Rules.ConsumableKind(item.id, item.facts, item.name) == "food" end },
   { key = "pots", label = "Potions", row = 1, claims = function(item) return kind(item) == "consumable" and Rules.ConsumableKind(item.id, item.facts, item.name) == "potion" end },
   { key = "cons", label = "Consumables", row = 1, claims = function(item) return kind(item) == "consumable" end },
-  { key = "prof", label = "Your professions use", ours = true, row = 2, claims = function(item) return Rules.ProfessionUses(item.id) end },
+  { key = "prof", label = "Professions", ours = true, row = 2, claims = function(item) return Rules.ProfessionUses(item.id) end },
   { key = "recipe", label = "Recipes", row = 2, claims = function(item) return kind(item) == "recipe" end },
-  { key = "trade", label = "Other trade goods", row = 2, claims = function(item) return kind(item) == "trade" end },
+  { key = "trade", label = "Trade goods", row = 2, claims = function(item) return kind(item) == "trade" end },
   { key = "gear", label = "Gear", row = 3, claims = function(item) return kind(item) == "gear" end },
-  { key = "other", label = "Everything else", row = 3, claims = function() return true end },
-  { key = "empty", label = "Empty", row = 4, empty = true, claims = function() return false end },
+  { key = "other", label = "Other", row = 3, claims = function() return true end },
+  { key = "empty", label = "Empty", row = 3, empty = true, claims = function() return false end },
 }
 local GROUP_BY_KEY = {}
 for _, g in ipairs(GROUPS) do GROUP_BY_KEY[g.key] = g end
@@ -219,6 +222,7 @@ local function holderFor(bag)
   holder:SetID(bag)
   holder:SetSize(1, 1)
   holder:SetPoint("TOPLEFT")
+  holder:SetScale(TILE_SCALE)
   -- what the client's button code asks of its parent
   function holder:MatchesBagID(id) return id == bag end
   function holder:GetBagID() return bag end
@@ -242,7 +246,7 @@ local function buttonFor(bag, slot)
     return false
   end
   made:SetID(slot)
-  made:SetSize(TILE, TILE)
+  made:SetSize(NATIVE_TILE, NATIVE_TILE)
   made:Hide()
   buttons[bag][slot] = made
   return made
@@ -295,7 +299,7 @@ local function headerFor(i)
   h = CreateFrame("Button", nil, win.scroll.content)
   h:SetHeight(HEADER_H)
   h:RegisterForClicks("LeftButtonUp")
-  h.label = UI.Text(h, "title", 13, C.goldSoft)
+  h.label = UI.Text(h, "title", 11, C.goldSoft)
   h.label:SetPoint("LEFT", 0, 0)
   h:SetScript("OnClick", function(self)
     D.db.collapsed[self.key] = not D.db.collapsed[self.key] or nil
@@ -352,7 +356,7 @@ local function freeLabel(i)
   l = CreateFrame("Frame", nil, win.scroll.content)
   l:SetSize(TILE, TILE)
   l:EnableMouse(false)
-  l.text = UI.Text(l, "bold", 14, C.muted, "OVERLAY")
+  l.text = UI.Text(l, "bold", 13, C.muted, "OVERLAY")
   l.text:SetPoint("CENTER")
   freeLabels[i] = l
   return l
@@ -403,7 +407,8 @@ function Pocket:Layout(now)
   local function place(b, x, y)
     wanted[b] = true
     b:ClearAllPoints()
-    b:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
+    -- a frame's offsets are in its own scale, and slots inherit theirs from the holder
+    b:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x / TILE_SCALE, y / TILE_SCALE)
     b:Show()
   end
 
@@ -492,17 +497,17 @@ function Pocket:Layout(now)
   -- it fits its contents until it would take too much of the screen
   local height = -(y - lineHeight)
   win.scroll.content:SetSize(width, height)
-  local chrome = WINDOW_HEAD + SEARCH_H + FOOT + PAD
-  win:SetSize(width + 2 * PAD + 12, math.min(height + chrome, GetScreenHeight() * SCREEN_SHARE))
+  local chrome = WINDOW_HEAD + FOOT + 2 * BODY_MARGIN
+  win:SetSize(width + 2 * PAD, math.min(height + chrome, GetScreenHeight() * SCREEN_SHARE))
   self:DrawFooter()
 end
 
 function Pocket:DrawFooter()
   local totalFree, total = D.FreeSlots()
   win:SetSub(string.format("%d of %d free", totalFree, total))
-  win.money:SetText(D.Money(D.Global("GetMoney") or 0))
+  win.money:SetText(editing and "" or D.Money(D.Global("GetMoney") or 0))   -- the hint needs the room
   local status = D.Mover:Status()
-  local text = editing and "Arrows move a group. Click an item to choose its group." or ""
+  local text = editing and "Arrows move. Click an item to regroup it." or ""
   if status then
     text = status.paused and ("Paused: " .. status.paused) or string.format("%s: %d of %d", status.label or "Moving", status.done, status.total)
   end
@@ -521,7 +526,7 @@ end
 -------------------------------------------------------------------------------------------
 
 local function build()
-  win = UI.Window({ name = "DimensionPocket", addon = "dimension", title = "Dimension", width = COLS * (TILE + GAP) + 2 * PAD + 12, height = 400, footer = true })
+  win = UI.Window({ name = "DimensionPocket", addon = "dimension", title = "Dimension", width = COLS * (TILE + GAP) - GAP + 2 * PAD, height = 400, footer = true })
   win:SetAccent("dimension")
   win:Hide()
   if win.powered then win.powered:Hide() end
@@ -529,29 +534,37 @@ local function build()
     win:ClearAllPoints()
     win:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -40, 100)
   end
-  win.search = UI.Search(win.body, "Search your bags", function() Pocket:Layout(true) end)
-  win.search:SetPoint("TOPLEFT", PAD, -6)
-  win.search:SetPoint("TOPRIGHT", -PAD, -6)
+  -- a smaller head and foot than a full suite window, with the search in the head instead of a row of its own
+  win.header:SetHeight(WINDOW_HEAD)
+  win.footer:SetHeight(FOOT)
+  win.mark:SetSize(22, 22)
+  win.title:SetFontObject(UI.Font("title", 15))
+  win.sub:SetFontObject(UI.Font("body", 12))
+  win.search = UI.Search(win.header, "Search", function() Pocket:Layout(true) end)
+  win.search:SetSize(150, 22)
+  win.search:SetPoint("RIGHT", win.close, "LEFT", -8, 0)
   win.scroll = UI.ScrollArea(win.body)
-  win.scroll:SetPoint("TOPLEFT", PAD, -SEARCH_H - 4)
-  win.scroll:SetPoint("BOTTOMRIGHT", -PAD, 4)
+  win.scroll:SetPoint("TOPLEFT", PAD, -BODY_MARGIN)
+  win.scroll:SetPoint("BOTTOMRIGHT", -PAD, BODY_MARGIN)
   win.money = UI.Text(win.footer, "body", 12)
   win.money:SetPoint("LEFT", 12, 0)
   win.footerText:ClearAllPoints()
   win.footerText:SetPoint("LEFT", win.money, "RIGHT", 10, 0)
   win.more = UI.Button(win.footer, "Rules", "quiet", function() D.Window:Open("rules") end)
-  win.more:SetSize(50, 20)
+  win.more:SetSize(44, 18)
   win.more:SetPoint("RIGHT", -8, 0)
   win.room = UI.Button(win.footer, "Make room", "quiet", function() D.Window:Open("room") end)
-  win.room:SetSize(78, 20)
+  win.room:SetSize(72, 18)
   win.room:SetPoint("RIGHT", win.more, "LEFT", -4, 0)
   win.edit = UI.Button(win.footer, "Edit layout", "quiet", function() Pocket:SetEditing(not editing) end)
-  win.edit:SetSize(78, 20)
+  win.edit:SetSize(72, 18)
   win.edit:SetPoint("RIGHT", win.room, "LEFT", -4, 0)
   win.reset = UI.Button(win.footer, "Reset", "quiet", function() Pocket:ResetLayout() end)
-  win.reset:SetSize(50, 20)
+  win.reset:SetSize(44, 18)
   win.reset:SetPoint("RIGHT", win.edit, "LEFT", -4, 0)
   win.reset:Hide()
+  win.footerText:SetPoint("RIGHT", win.reset, "LEFT", -6, 0)
+  win.footerText:SetWordWrap(false)
   Pocket.frame = win
 end
 
