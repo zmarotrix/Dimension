@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.1, 2026-11-06
+
+- The fill bar is now rounded, the same bar as quest progress, with the slots in use beside it as 22/30. The count no longer sits by the window's name.
+
 ## 0.13.0, 2026-11-06
 
 - **A bar under the title shows how full your bags are** at a glance: green, through yellow at 60%, to red by 95%.

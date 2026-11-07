@@ -39,7 +39,7 @@ local RENAME_W, RENAME_LETTERS = 110, 24
 local ZONE_ALPHA = .12      -- how strongly a group's area shows in Edit layout
 local ZONE_HOT = .35        -- and the one a drag would land in
 local NEW_ROW_H = 20        -- the strip under the groups in Edit layout: drop a group there for a row of its own
-local FILL_H = 5            -- the bar showing how full the bags are
+local FILL_BAR_H, FILL_H = 7, 14   -- the bar showing how full the bags are, and its row, which fits the count beside it
 local FILL_YELLOW, FILL_RED = .6, .95   -- how full it is at each colour: half-full bags are nothing to worry about
 local BUTTON_H, BUTTON_PAD = 18, 12
 local SCREEN_SHARE = .8     -- the most of the screen it takes before it scrolls
@@ -850,19 +850,15 @@ function Pocket.FillColor(share)
 end
 
 local function drawFillBar(free, total)
-  local share = total > 0 and (total - free) / total or 0
-  local full = COLS * (TILE + GAP) - GAP
-  local c = Pocket.FillColor(share)
-  win.fill:SetColorTexture(c[1], c[2], c[3], 1)
-  win.fill:SetWidth(math.max(1, full * share))
-  win.fill:SetShown(share > 0)      -- a texture with no width stretches to its anchors
+  local used = total - free
+  win.fillBar.accent = Pocket.FillColor(total > 0 and used / total or 0)
+  win.fillBar:SetProgress(used, total)
+  win.fillCount:SetText(string.format("%d/%d", used, total))
 end
 
 function Pocket:DrawFooter()
   fitFooterButtons()
-  local totalFree, total = D.FreeSlots()
-  win:SetSub(string.format("%d of %d free", totalFree, total))
-  drawFillBar(totalFree, total)
+  drawFillBar(D.FreeSlots())
   win.money:SetText(editing and "" or D.Coins(D.Global("GetMoney") or 0))   -- the hint needs the room
   local status = D.Mover:Status()
   local text = editing and "Drag titles and items to move them. Click a title to rename it." or ""
@@ -902,13 +898,12 @@ local function build()
   win.search:SetSize(150, 22)
   win.search:SetPoint("RIGHT", win.close, "LEFT", -8, 0)
   win.scroll = UI.ScrollArea(win.body)
-  win.fillTrack = UI.Tex(win.body, "ARTWORK", 0, C.track)
-  win.fillTrack:SetPoint("TOPLEFT", PAD, -BODY_MARGIN)
-  win.fillTrack:SetPoint("TOPRIGHT", -PAD, -BODY_MARGIN)
-  win.fillTrack:SetHeight(FILL_H)
-  win.fill = UI.Tex(win.body, "ARTWORK", 1, C.easy)
-  win.fill:SetPoint("TOPLEFT", win.fillTrack, "TOPLEFT")
-  win.fill:SetHeight(FILL_H)
+  local fillY = -(BODY_MARGIN + FILL_H / 2)
+  win.fillCount = UI.Text(win.body, "bold", 12, C.text)
+  win.fillCount:SetPoint("RIGHT", win.body, "TOPRIGHT", -PAD, fillY)
+  win.fillBar = UI.Bar(win.body, nil, FILL_BAR_H)
+  win.fillBar:SetPoint("LEFT", win.body, "TOPLEFT", PAD, fillY)
+  win.fillBar:SetPoint("RIGHT", win.fillCount, "LEFT", -6, 0)
   win.scroll:SetPoint("TOPLEFT", PAD, -(2 * BODY_MARGIN + FILL_H))
   win.scroll:SetPoint("BOTTOMRIGHT", -PAD, BODY_MARGIN)
   win.money = UI.Text(win.footer, "bold", 14, { 1, 1, 1 })
