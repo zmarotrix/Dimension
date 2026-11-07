@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.5, 2026-11-06
+
+- What sells at the next vendor now shows the game's gold coin rather than a yellow dot, and its icon is greyed, in the bag window and on the game's
+  own bags. The small marks setting turns off both.
+
 ## 0.11.4, 2026-11-06
 
 - The bag window shows your money with the game's coin icons, as its own bags do.

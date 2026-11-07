@@ -30,7 +30,7 @@ Core:OnLogin(function()
     function() return D.db.combatBags == "game" end, function(on) D.db.combatBags = on and "game" or nil end)
   list:Toggle("The strip beside the game's bags", "When they're showing: free slots, what can go, and the Tidy and Make room buttons.",
     function() return D.db.strip end, function(on) D.db.strip = on D:Changed() end)
-  list:Toggle("Small marks on bag slots", "A coin for what sells at the next vendor, a tick for your Keep marks, an arrow for pinned slots.",
+  list:Toggle("Small marks on bag slots", "A gold coin and a greyed icon for what sells at the next vendor, a tick for your Keep marks, an arrow for pinned slots.",
     function() return D.db.marks end, function(on) D.db.marks = on D:Changed() end)
   list:Toggle("The verdict and reason in tooltips", nil,
     function() return D.db.tooltips end, function(on) D.db.tooltips = on end)

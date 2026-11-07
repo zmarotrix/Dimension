@@ -1,6 +1,7 @@
 -- What Dimension adds to the game's own bags: a strip beside them and small marks on the slots. It
 -- never replaces them. Marks are separate frames that take no mouse, kept in a table of our own, so
--- nothing is written onto Blizzard's buttons and clicks reach them as before.
+-- nothing is written onto Blizzard's buttons and clicks reach them as before. Greying what sells only
+-- recolours the icon, through the same client functions its own bags use for a locked item.
 
 local Core = NorgannonCore
 local D = Dimension
@@ -13,9 +14,12 @@ D.Overlay = Overlay
 local Rules = D.Rules
 
 local MARK_SIZE = 13
+local COIN_SIZE = 15
+local COIN = "Interface\\MoneyFrame\\UI-GoldIcon"
+local SELL_SHADE = .6        -- how dark the icon of something that sells gets, on top of losing its colour
 local STRIP_W, STRIP_H = 318, 38
 local LOW_FREE = 4           -- the strip's count turns to a warning at this many free slots
-local GOLD, GREEN = { .91, .78, .42 }, { .56, .88, .56 }
+local GREEN = { .56, .88, .56 }
 local WARN = { 1, .58, .47 }
 
 local marks = setmetatable({}, { __mode = "k" })   -- item button -> its marks
@@ -43,7 +47,9 @@ local function marksFor(button)
   m:SetAllPoints()
   m:EnableMouse(false)
   m:SetFrameLevel((button:GetFrameLevel() or 1) + 3)
-  m.sell = UI.Icon(m, "circle", MARK_SIZE, GOLD, "OVERLAY")
+  m.sell = m:CreateTexture(nil, "OVERLAY")
+  m.sell:SetTexture(COIN)
+  m.sell:SetSize(COIN_SIZE, COIN_SIZE)
   m.sell:SetPoint("TOPLEFT", 1, -1)
   m.keep = UI.Icon(m, "check", MARK_SIZE, GREEN, "OVERLAY")
   m.keep:SetPoint("TOPLEFT", 1, -1)
@@ -69,10 +75,22 @@ local function refreshButton(button)
   if not (okBag and okSlot and bag and slot) or Core.IsSecret(bag) then return end
   local m = marksFor(button)
   local show, pinned
+  local info = D.Read(bag, slot)
   if D.db.marks then
-    show, pinned = Overlay.MarkOf(bag, slot, D.Read(bag, slot))
+    show, pinned = Overlay.MarkOf(bag, slot, info)
   end
   m.sell:SetShown(show == "sell")
+  -- every time, not once: the game resets the icon whenever it redraws the slot. Undone only if it was greyed,
+  -- so a slot that never sells is left entirely to the game.
+  if show == "sell" then
+    SetItemButtonDesaturated(button, true)
+    SetItemButtonTextureVertexColor(button, SELL_SHADE, SELL_SHADE, SELL_SHADE)
+    m.greyed = true
+  elseif m.greyed then
+    SetItemButtonDesaturated(button, info and info.isLocked)
+    SetItemButtonTextureVertexColor(button, 1, 1, 1)
+    m.greyed = nil
+  end
   m.keep:SetShown(show == "keep")
   m.pin:SetShown(pinned and true or false)
 end
