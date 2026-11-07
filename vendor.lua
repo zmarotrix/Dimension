@@ -172,6 +172,15 @@ function Vendor:Sell(pass)
   return true
 end
 
+---What a Sell button sells now: how many stacks and what they fetch, within the buyback limit.
+function Vendor:Offer()
+  local list = Rules:SellList()
+  local count = math.min(#list, self:Room())
+  local value = 0
+  for i = 1, count do value = value + (list[i].value or 0) end
+  return count, value
+end
+
 ---What's waiting because of the buyback limit.
 function Vendor:Held()
   if not visit or self:Room() > 0 then return 0 end
@@ -270,6 +279,8 @@ end
 Core:On("MERCHANT_SHOW", "dimension.vendor", function()
   open = true
   visit = { sold = {}, value = 0, spent = 0, bought = 0 }
+  -- what's restricted here, and whether a click's sales then go through, is only known from the real game
+  if D.db then D.db.probe.restrictionsAtVendor = D.ActiveRestrictions() end
   if not D.db or D.PauseReason() then
     D:Changed()
     return

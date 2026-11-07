@@ -87,7 +87,8 @@ local function fillVendor()
   elseif held > 0 then
     f:SetAction(string.format("Sell %d more (can't all be bought back)", held), function() Vendor:Sell(true) end)
   elseif waiting > 0 and not Vendor:Selling() then
-    f:SetAction(string.format("Sell %d", waiting), function() Vendor:Sell() end)
+    local count, value = Vendor:Offer()
+    f:SetAction(string.format("Confirm and sell %d for %s", count, D.Money(value)), function() Vendor:Sell() end)
   else
     f:SetAction(nil)
   end

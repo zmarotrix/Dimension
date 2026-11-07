@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.6, 2026-11-06
+
+- Fixed: selling, bank trips, Tidy and merging could all stop with "the game has add-ons restricted" while you weren't in a fight. Only
+  combat, encounters, keystones and PvP matches stop them now. A map or chat restriction doesn't.
+- The vendor panel's button now reads "Confirm and sell 3 for 24s 15c", so you can check the list and the total first.
+
 ## 0.11.5, 2026-11-06
 
 - What sells at the next vendor now shows the game's gold coin rather than a yellow dot, and its icon is greyed, in the bag window and on the game's

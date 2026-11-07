@@ -103,17 +103,33 @@ end
 -- When not to touch anything
 -------------------------------------------------------------------------------------------
 
+-- The client's restriction kinds that mean a fight or match. The others don't stop items moving: Chat is only
+-- add-on chat, and Map is being on a map with restrictions. Checking every kind stopped selling at a vendor out of a
+-- fight (Maro, 2026-11-06); db.probe.restrictionsAtVendor will say which kind it was.
+local FIGHTS = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" }
+
 ---Why nothing may move right now, or nil. No bag call is flagged as blocked in combat, but a slot
 ---shifting under someone mid-fight is never what they want, so everything stops regardless.
 function D.PauseReason()
   if D.Global("InCombatLockdown") then return "in combat" end
   local kinds = rawget(_G, "Enum") and Enum.AddOnRestrictionType
   if kinds then
-    for _, kind in pairs(kinds) do
-      if D.In("C_RestrictedActions", "IsAddOnRestrictionActive", kind) then return "the game has add-ons restricted" end
+    for _, name in ipairs(FIGHTS) do
+      if kinds[name] and D.In("C_RestrictedActions", "IsAddOnRestrictionActive", kinds[name]) then return "a fight or match is under way" end
     end
   end
   return nil
+end
+
+---The names of every restriction active now, whatever they mean, for the probe.
+function D.ActiveRestrictions()
+  local out = {}
+  local kinds = rawget(_G, "Enum") and Enum.AddOnRestrictionType
+  for name, kind in pairs(kinds or {}) do
+    if D.In("C_RestrictedActions", "IsAddOnRestrictionActive", kind) then out[#out + 1] = name end
+  end
+  table.sort(out)
+  return out
 end
 
 ---True when the cursor is holding something: that's the player mid-drag, not ours to disturb.
