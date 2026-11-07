@@ -337,10 +337,11 @@ function Pocket:ChooseGroup(id, owner)
   Core:ShowActionMenu(owner or win, "item", id, { title = name .. " goes in", items = self.GroupChoices(id) })
 end
 
----Edit layout on or off. Not in combat: it's no time to rearrange, and the game may refuse.
+---Edit layout on or off. Not in combat, which is no time to rearrange. Nothing else stops it: it only changes
+---where the window draws things, so none of the client's other restrictions matter to it.
 function Pocket:SetEditing(on)
-  if on and D.PauseReason() then
-    D:Print("Not now: " .. D.PauseReason() .. ".")
+  if on and D.Global("InCombatLockdown") then
+    D:Print("Not in combat.")
     return false
   end
   editing = on and true or false

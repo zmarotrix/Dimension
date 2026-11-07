@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.7, 2026-11-06
+
+- Fixed: Edit layout could refuse with a message about restrictions when you weren't fighting. Only combat stops it now.
+
 ## 0.11.6, 2026-11-06
 
 - Fixed: selling, bank trips, Tidy and merging could all stop with "the game has add-ons restricted" while you weren't in a fight. Only
