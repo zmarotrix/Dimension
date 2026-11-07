@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.4, 2026-11-06
+
+- The bag window shows your money with the game's coin icons, as its own bags do.
+
 ## 0.11.3, 2026-11-06
 
 - Fixed: the bag window's footer buttons were too narrow for their text. They now size themselves to it.

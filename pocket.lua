@@ -515,7 +515,7 @@ function Pocket:DrawFooter()
   fitFooterButtons()
   local totalFree, total = D.FreeSlots()
   win:SetSub(string.format("%d of %d free", totalFree, total))
-  win.money:SetText(editing and "" or D.Money(D.Global("GetMoney") or 0))   -- the hint needs the room
+  win.money:SetText(editing and "" or D.Coins(D.Global("GetMoney") or 0))   -- the hint needs the room
   local status = D.Mover:Status()
   local text = editing and "Click an item to regroup it." or ""
   if status then
@@ -556,7 +556,7 @@ local function build()
   win.scroll = UI.ScrollArea(win.body)
   win.scroll:SetPoint("TOPLEFT", PAD, -BODY_MARGIN)
   win.scroll:SetPoint("BOTTOMRIGHT", -PAD, BODY_MARGIN)
-  win.money = UI.Text(win.footer, "bold", 14)
+  win.money = UI.Text(win.footer, "bold", 14, { 1, 1, 1 })
   win.money:SetPoint("LEFT", 12, 0)
   win.footerText:ClearAllPoints()
   win.footerText:SetPoint("LEFT", win.money, "RIGHT", 10, 0)

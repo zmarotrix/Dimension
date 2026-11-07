@@ -235,6 +235,18 @@ function D.Money(copper)
   return table.concat(out, " ")
 end
 
+---Money as the game's own bags show it: white numbers and coin icons, with every coin below the largest.
+function D.Coins(copper)
+  copper = math.floor(copper or 0)
+  local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+  local function coin(amount, metal) return amount .. "|TInterface\\MoneyFrame\\UI-" .. metal .. "Icon:0:0:2:0|t" end
+  local out = {}
+  if g > 0 then out[#out + 1] = coin(g, "Gold") end
+  if g > 0 or s > 0 then out[#out + 1] = coin(s, "Silver") end
+  out[#out + 1] = coin(c, "Copper")
+  return table.concat(out, " ")
+end
+
 -------------------------------------------------------------------------------------------
 -- Opening
 -------------------------------------------------------------------------------------------
