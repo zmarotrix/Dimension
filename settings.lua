@@ -28,6 +28,11 @@ Core:OnLogin(function()
     function() return D.db.pocket end, function(on) D.Pocket:SetEnabled(on) end)
   list:Toggle("Use the game's bags during fights", "Turns on by itself if the game ever blocks something of Dimension's in combat.",
     function() return D.db.combatBags == "game" end, function(on) D.db.combatBags = on and "game" or nil end)
+  list:Toggle("The bar showing how full your bags are", "Under the items in Dimension's bag window, with the slots in use beside it.",
+    function() return D.db.fillBar end, function(on)
+      D.db.fillBar = on
+      D.Pocket:Layout(true)
+    end)
   list:Toggle("The strip beside the game's bags", "When they're showing: free slots, what can go, and the Tidy and Make room buttons.",
     function() return D.db.strip end, function(on) D.db.strip = on D:Changed() end)
   list:Toggle("Small marks on bag slots", "A gold coin and a greyed icon for what sells at the next vendor, a tick for your Keep marks, an arrow for pinned slots.",

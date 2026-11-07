@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.2, 2026-11-06
+
+- The fill bar now sits under the items, and a setting turns it off: "The bar showing how full your bags are" in `/dim settings`.
+
 ## 0.13.1, 2026-11-06
 
 - The fill bar is now rounded, the same bar as quest progress, with the slots in use beside it as 22/30. The count no longer sits by the window's name.

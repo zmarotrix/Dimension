@@ -830,7 +830,10 @@ function Pocket:Layout(now)
   end
   if newRowStrip then newRowStrip:SetShown(editing) end
   win.scroll.content:SetSize(width, height)
-  local chrome = WINDOW_HEAD + FOOT + 3 * BODY_MARGIN + FILL_H
+  -- the items end above the fill bar, or at the bottom without it
+  local barRoom = D.db.fillBar and FILL_H + BODY_MARGIN or 0
+  win.scroll:SetPoint("BOTTOMRIGHT", -PAD, BODY_MARGIN + barRoom)
+  local chrome = WINDOW_HEAD + FOOT + 2 * BODY_MARGIN + barRoom
   win:SetSize(width + 2 * PAD, math.min(height + chrome, GetScreenHeight() * SCREEN_SHARE))
   self:DrawFooter()
 end
@@ -850,6 +853,9 @@ function Pocket.FillColor(share)
 end
 
 local function drawFillBar(free, total)
+  win.fillBar:SetShown(D.db.fillBar)
+  win.fillCount:SetShown(D.db.fillBar)
+  if not D.db.fillBar then return end
   local used = total - free
   win.fillBar.accent = Pocket.FillColor(total > 0 and used / total or 0)
   win.fillBar:SetProgress(used, total)
@@ -898,13 +904,13 @@ local function build()
   win.search:SetSize(150, 22)
   win.search:SetPoint("RIGHT", win.close, "LEFT", -8, 0)
   win.scroll = UI.ScrollArea(win.body)
-  local fillY = -(BODY_MARGIN + FILL_H / 2)
+  local fillY = BODY_MARGIN + FILL_H / 2
   win.fillCount = UI.Text(win.body, "bold", 12, C.text)
-  win.fillCount:SetPoint("RIGHT", win.body, "TOPRIGHT", -PAD, fillY)
+  win.fillCount:SetPoint("RIGHT", win.body, "BOTTOMRIGHT", -PAD, fillY)
   win.fillBar = UI.Bar(win.body, nil, FILL_BAR_H)
-  win.fillBar:SetPoint("LEFT", win.body, "TOPLEFT", PAD, fillY)
+  win.fillBar:SetPoint("LEFT", win.body, "BOTTOMLEFT", PAD, fillY)
   win.fillBar:SetPoint("RIGHT", win.fillCount, "LEFT", -6, 0)
-  win.scroll:SetPoint("TOPLEFT", PAD, -(2 * BODY_MARGIN + FILL_H))
+  win.scroll:SetPoint("TOPLEFT", PAD, -BODY_MARGIN)
   win.scroll:SetPoint("BOTTOMRIGHT", -PAD, BODY_MARGIN)
   win.money = UI.Text(win.footer, "bold", 14, { 1, 1, 1 })
   win.money:SetPoint("LEFT", 12, 0)
