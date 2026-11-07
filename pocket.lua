@@ -37,6 +37,7 @@ local PAD = 6
 local HEADER_H = 16
 local WINDOW_HEAD, FOOT = 32, 24
 local BODY_MARGIN = 4
+local BUTTON_H, BUTTON_PAD = 18, 12
 local SCREEN_SHARE = .8     -- the most of the screen it takes before it scrolls
 local KEYRING = -1          -- Enum.BagIndex.Keyring: the game's own frame keeps showing it
 
@@ -502,12 +503,21 @@ function Pocket:Layout(now)
   self:DrawFooter()
 end
 
+---Each footer button as wide as its text, measured whenever it's drawn: a label's width depends on the player's
+---font and scale, and is only reliable once the client has sized the text.
+local function fitFooterButtons()
+  for _, b in ipairs({ win.more, win.room, win.edit, win.reset }) do
+    b:SetWidth(math.ceil(b.label:GetStringWidth() or 0) + BUTTON_PAD)
+  end
+end
+
 function Pocket:DrawFooter()
+  fitFooterButtons()
   local totalFree, total = D.FreeSlots()
   win:SetSub(string.format("%d of %d free", totalFree, total))
   win.money:SetText(editing and "" or D.Money(D.Global("GetMoney") or 0))   -- the hint needs the room
   local status = D.Mover:Status()
-  local text = editing and "Arrows move. Click an item to regroup it." or ""
+  local text = editing and "Click an item to regroup it." or ""
   if status then
     text = status.paused and ("Paused: " .. status.paused) or string.format("%s: %d of %d", status.label or "Moving", status.done, status.total)
   end
@@ -546,22 +556,25 @@ local function build()
   win.scroll = UI.ScrollArea(win.body)
   win.scroll:SetPoint("TOPLEFT", PAD, -BODY_MARGIN)
   win.scroll:SetPoint("BOTTOMRIGHT", -PAD, BODY_MARGIN)
-  win.money = UI.Text(win.footer, "body", 12)
+  win.money = UI.Text(win.footer, "bold", 14)
   win.money:SetPoint("LEFT", 12, 0)
   win.footerText:ClearAllPoints()
   win.footerText:SetPoint("LEFT", win.money, "RIGHT", 10, 0)
   win.more = UI.Button(win.footer, "Rules", "quiet", function() D.Window:Open("rules") end)
-  win.more:SetSize(44, 18)
+  win.more:SetHeight(BUTTON_H)
   win.more:SetPoint("RIGHT", -8, 0)
   win.room = UI.Button(win.footer, "Make room", "quiet", function() D.Window:Open("room") end)
-  win.room:SetSize(72, 18)
+  win.room:SetHeight(BUTTON_H)
   win.room:SetPoint("RIGHT", win.more, "LEFT", -4, 0)
   win.edit = UI.Button(win.footer, "Edit layout", "quiet", function() Pocket:SetEditing(not editing) end)
-  win.edit:SetSize(72, 18)
+  win.edit:SetHeight(BUTTON_H)
   win.edit:SetPoint("RIGHT", win.room, "LEFT", -4, 0)
   win.reset = UI.Button(win.footer, "Reset", "quiet", function() Pocket:ResetLayout() end)
-  win.reset:SetSize(44, 18)
+  win.reset:SetHeight(BUTTON_H)
   win.reset:SetPoint("RIGHT", win.edit, "LEFT", -4, 0)
+  for _, b in ipairs({ win.more, win.room, win.edit, win.reset }) do
+    b.label:SetFontObject(UI.Font("title", 12))
+  end
   win.reset:Hide()
   win.footerText:SetPoint("RIGHT", win.reset, "LEFT", -6, 0)
   win.footerText:SetWordWrap(false)

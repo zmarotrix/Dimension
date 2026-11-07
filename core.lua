@@ -229,9 +229,9 @@ function D.Money(copper)
   copper = math.floor(copper or 0)
   local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
   local out = {}
-  if g > 0 then out[#out + 1] = "|cffe7c66c" .. g .. "g|r" end
-  if s > 0 then out[#out + 1] = "|cffc8c8c8" .. s .. "s|r" end
-  if c > 0 or #out == 0 then out[#out + 1] = "|cffc07a45" .. c .. "c|r" end
+  if g > 0 then out[#out + 1] = "|cffffd100" .. g .. "g|r" end
+  if s > 0 then out[#out + 1] = "|cffe6e6e6" .. s .. "s|r" end
+  if c > 0 or #out == 0 then out[#out + 1] = "|cffeda55f" .. c .. "c|r" end
   return table.concat(out, " ")
 end
 

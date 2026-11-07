@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.3, 2026-11-06
+
+- Fixed: the bag window's footer buttons were too narrow for their text. They now size themselves to it.
+- Your money is larger, bolder and brighter in the bag window, and brighter wherever else Dimension shows it.
+
 ## 0.11.2, 2026-11-06
 
 - **A more compact bag window:** 14 slots across at 32 pixels each, tighter gaps, a smaller head and foot, and the search moved into the
