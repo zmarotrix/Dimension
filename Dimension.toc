@@ -1,5 +1,6 @@
 ## Interface: 16001
 ## Title: |cfff08a9dDimension|r
+## Category: NorgannonDB
 ## Notes: Your bags, looked after: sells what's safe, frees space when bags fill up, runs bank trips and keeps things in their places, and can always say why. Powered by NorgannonDB. /dim
 ## Author: Maro
 ## Version: 0.13.2
