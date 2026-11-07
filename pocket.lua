@@ -37,6 +37,8 @@ local PAD = 6
 local HEADER_H = 16
 local WINDOW_HEAD, FOOT = 32, 24
 local BODY_MARGIN = 4
+local RENAME_W, RENAME_LETTERS = 110, 24
+local ZONE_ALPHA = .12      -- how strongly a group's area shows in Edit layout
 local BUTTON_H, BUTTON_PAD = 18, 12
 local SCREEN_SHARE = .8     -- the most of the screen it takes before it scrolls
 local KEYRING = -1          -- Enum.BagIndex.Keyring: the game's own frame keeps showing it
@@ -63,7 +65,9 @@ for _, g in ipairs(GROUPS) do GROUP_BY_KEY[g.key] = g end
 
 local win
 local holders, buttons = {}, {}     -- [bag] = holder frame; [bag][slot] = button
-local headers, freeLabels, catchers = {}, {}, {}
+local headers, freeLabels, catchers, zones = {}, {}, {}, {}
+local groupRects = {}       -- where each group is drawn, to know what an item was dropped on
+local ghost, draggedAt
 local editing = false
 local dirty = false
 local openedAt
@@ -134,10 +138,23 @@ function Pocket:MoveGroup(key, direction)
   self:Layout(true)
 end
 
----Puts every group back and forgets each item's chosen group.
+local function labelOf(g) return D.db.names[g.key] or g.label end
+
+---Names a group. A blank name, or its usual one, goes back to the usual one.
+function Pocket:Rename(key, text)
+  local g = GROUP_BY_KEY[key]
+  if not g then return end
+  local name = strtrim(text or "")
+  D.db.names[key] = (name ~= "" and name ~= g.label) and name or nil
+  self:Layout(true)
+end
+
+---Puts every group back: places, names and each item's chosen group.
 function Pocket:ResetLayout()
+  self:EndRename(false)
   D.db.layout = nil
   wipe(D.db.assign)
+  wipe(D.db.names)
   self:Layout(true)
 end
 
@@ -188,7 +205,7 @@ function Pocket:Sections()
     local items = filled[g.key]
     table.sort(items, byQuality)
     if #items > 0 or (g.empty and #free > 0) or editing then
-      out[#out + 1] = { key = g.key, label = g.label, ours = g.ours, row = place.row, empty = g.empty, items = items }
+      out[#out + 1] = { key = g.key, label = labelOf(g), ours = g.ours, row = place.row, empty = g.empty, items = items }
     end
   end
   return out, free
@@ -200,10 +217,7 @@ function Pocket.GroupChoices(id)
   for _, g in ipairs(GROUPS) do
     if not g.empty then
       local here = D.db.assign[id] == g.key
-      items[#items + 1] = { text = g.label .. (here and " (chosen)" or ""), func = function()
-        D.db.assign[id] = g.key
-        Pocket:Layout(true)
-      end }
+      items[#items + 1] = { text = labelOf(g) .. (here and " (chosen)" or ""), func = function() Pocket:PlaceItem(id, g.key) end }
     end
   end
   items[#items + 1] = { text = "Back to the rules", func = function()
@@ -303,6 +317,10 @@ local function headerFor(i)
   h.label = UI.Text(h, "title", 11, C.goldSoft)
   h.label:SetPoint("LEFT", 0, 0)
   h:SetScript("OnClick", function(self)
+    if editing then
+      Pocket:StartRename(self)
+      return
+    end
     D.db.collapsed[self.key] = not D.db.collapsed[self.key] or nil
     Pocket:Layout(true)
   end)
@@ -327,9 +345,126 @@ local function catcherFor(i)
   c = CreateFrame("Button", nil, win.scroll.content)
   c:SetSize(TILE, TILE)
   c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  c:SetScript("OnClick", function(self) Pocket:ChooseGroup(self.itemId, self) end)
+  c:RegisterForDrag("LeftButton")
+  c:SetScript("OnClick", function(self)
+    if draggedAt ~= GetTime() then Pocket:ChooseGroup(self.itemId, self) end   -- letting go of a drag isn't a click
+  end)
+  c:SetScript("OnDragStart", function(self) Pocket:StartItemDrag(self) end)
+  c:SetScript("OnDragStop", function() Pocket:StopItemDrag() end)
+  -- it covers the game's button, so it has to show what the item is
+  c:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetBagItem(self.bag, self.slot)
+    GameTooltip:Show()
+  end)
+  c:SetScript("OnLeave", function() GameTooltip:Hide() end)
   catchers[i] = c
   return c
+end
+
+---The tinted area behind a group in Edit layout, showing where an item can be dropped.
+local function zoneFor(i)
+  local z = zones[i]
+  if z then return z end
+  z = UI.Tex(win.scroll.content, "BACKGROUND", 0, C.frameGold)
+  z:SetAlpha(ZONE_ALPHA)
+  zones[i] = z
+  return z
+end
+
+---Puts an item in a group, if that group can hold items.
+function Pocket:PlaceItem(id, key)
+  local g = GROUP_BY_KEY[key]
+  if not g or g.empty then return false end
+  D.db.assign[id] = key
+  self:Layout(true)
+  return true
+end
+
+---Which group is at this point of the window's contents: x to the right, y negative going down.
+function Pocket.GroupAt(x, y)
+  for _, r in ipairs(groupRects) do
+    if x >= r.x and x <= r.x + r.w and y <= r.y and y >= r.y - r.h then return r.key end
+  end
+end
+Pocket.groupRects = groupRects
+
+-- Dragging only moves a picture of the item: nothing is picked up, so the item can't be dropped anywhere by accident.
+function Pocket:StartItemDrag(catcher)
+  if not ghost then
+    ghost = CreateFrame("Frame", nil, UIParent)
+    ghost:SetSize(TILE, TILE)
+    ghost:SetFrameStrata("TOOLTIP")
+    ghost:EnableMouse(false)
+    ghost.icon = ghost:CreateTexture(nil, "ARTWORK")
+    ghost.icon:SetAllPoints()
+    ghost:SetScript("OnUpdate", function(self)
+      local x, y = GetCursorPosition()
+      local scale = UIParent:GetEffectiveScale()
+      self:ClearAllPoints()
+      self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+    end)
+  end
+  local info = D.Read(catcher.bag, catcher.slot)
+  ghost.itemId = catcher.itemId
+  ghost.icon:SetTexture(info and info.iconFileID)
+  ghost:Show()
+  GameTooltip:Hide()
+end
+
+function Pocket:StopItemDrag()
+  if not (ghost and ghost:IsShown()) then return end
+  ghost:Hide()
+  draggedAt = GetTime()
+  if not win.scroll:IsMouseOver() then return end
+  local content = win.scroll.content
+  local left, top = content:GetLeft(), content:GetTop()
+  if not (left and top) then return end
+  local x, y = GetCursorPosition()
+  local scale = content:GetEffectiveScale()
+  local key = self.GroupAt(x / scale - left, y / scale - top)
+  if key then self:PlaceItem(ghost.itemId, key) end
+end
+
+-- One box for typing a group's name, put over the title that was clicked.
+local renamer
+
+---Finishes typing a name, keeping it or not. Does nothing if no name is being typed.
+function Pocket:EndRename(keep)
+  if not (renamer and renamer.key) then return end
+  local key = renamer.key
+  renamer.key = nil         -- first: clearing the focus below comes back here
+  renamer:ClearFocus()
+  renamer:Hide()
+  if keep then self:Rename(key, renamer:GetText()) end
+end
+
+function Pocket:StartRename(header)
+  if not renamer then
+    renamer = CreateFrame("EditBox", nil, win.scroll.content)
+    renamer:SetSize(RENAME_W, HEADER_H)
+    renamer:SetAutoFocus(false)
+    renamer:SetMaxLetters(RENAME_LETTERS)
+    renamer:SetFontObject(UI.Font("title", 11))
+    renamer:SetTextColor(C.text[1], C.text[2], C.text[3])
+    renamer:SetTextInsets(3, 3, 0, 0)
+    local box = UI.Box(renamer, "BACKGROUND", 0)
+    box:Set(C.frameGold, C.black)
+    renamer:SetScript("OnEnterPressed", function() Pocket:EndRename(true) end)
+    renamer:SetScript("OnEscapePressed", function() Pocket:EndRename(false) end)
+    renamer:SetScript("OnEditFocusLost", function() Pocket:EndRename(true) end)
+    Pocket.renamer = renamer
+  end
+  self:EndRename(true)      -- may redo the layout, so the title's place is read after this
+  local width = win.scroll.content:GetWidth() or RENAME_W
+  renamer.key = header.key
+  renamer:ClearAllPoints()
+  renamer:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", math.min(header.layoutX, width - RENAME_W), header.layoutY)
+  renamer:SetFrameLevel((header:GetFrameLevel() or 1) + 10)
+  renamer:SetText(labelOf(GROUP_BY_KEY[header.key]))
+  renamer:Show()
+  renamer:SetFocus()
+  renamer:HighlightText()
 end
 
 function Pocket:ChooseGroup(id, owner)
@@ -344,9 +479,19 @@ function Pocket:SetEditing(on)
     D:Print("Not in combat.")
     return false
   end
+  if not on then self:EndRename(true) end
   editing = on and true or false
   win.edit:SetLabel(editing and "Done" or "Edit layout")
   win.reset:SetShown(editing)
+  -- the other footer buttons make way for the hint
+  win.more:SetShown(not editing)
+  win.room:SetShown(not editing)
+  win.edit:ClearAllPoints()
+  if editing then
+    win.edit:SetPoint("RIGHT", -8, 0)
+  else
+    win.edit:SetPoint("RIGHT", win.room, "LEFT", -4, 0)
+  end
   self:Layout(true)
   return true
 end
@@ -416,6 +561,7 @@ function Pocket:Layout(now)
 
   for _, l in ipairs(freeLabels) do l:Hide() end
   for _, c in ipairs(catchers) do c:Hide() end
+  wipe(groupRects)
   local usedCatchers = 0
   local x, y, lineHeight, row = 0, -2, 0, nil
   local usedHeaders = 0
@@ -443,6 +589,7 @@ function Pocket:Layout(now)
     row = s.row
     h:ClearAllPoints()
     h:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
+    h.layoutX, h.layoutY = x, y
     h:SetWidth(pixels)
     h:Show()
 
@@ -475,7 +622,7 @@ function Pocket:Layout(now)
           if editing then
             usedCatchers = usedCatchers + 1
             local c = catcherFor(usedCatchers)
-            c.itemId = item.id
+            c.itemId, c.bag, c.slot = item.id, item.bag, item.slot
             c:ClearAllPoints()
             c:SetPoint("TOPLEFT", b, "TOPLEFT")
             c:SetFrameLevel((b:GetFrameLevel() or 1) + 5)
@@ -485,10 +632,19 @@ function Pocket:Layout(now)
       end
     end
     local lines = columns > 0 and math.ceil(shown / columns) or 0
-    lineHeight = math.max(lineHeight, HEADER_H + lines * step)
+    if editing then lines = math.max(lines, 1) end   -- an empty group is still somewhere to drop an item
+    local groupHeight = HEADER_H + lines * step
+    lineHeight = math.max(lineHeight, groupHeight)
+    groupRects[#groupRects + 1] = { key = s.key, x = x, y = y, w = pixels, h = groupHeight }
+    local zone = zoneFor(usedHeaders)
+    zone:ClearAllPoints()
+    zone:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
+    zone:SetSize(pixels, groupHeight)
+    zone:SetShown(editing)
     x = x + pixels + GROUP_GAP
   end
   for i = usedHeaders + 1, #headers do headers[i]:Hide() end
+  for i = usedHeaders + 1, #zones do zones[i]:Hide() end
   for _, slots in pairs(buttons) do
     for _, b in pairs(slots) do
       if not wanted[b] then b:Hide() end
@@ -518,7 +674,7 @@ function Pocket:DrawFooter()
   win:SetSub(string.format("%d of %d free", totalFree, total))
   win.money:SetText(editing and "" or D.Coins(D.Global("GetMoney") or 0))   -- the hint needs the room
   local status = D.Mover:Status()
-  local text = editing and "Click an item to regroup it." or ""
+  local text = editing and "Drag items between groups. Click a title to rename it." or ""
   if status then
     text = status.paused and ("Paused: " .. status.paused) or string.format("%s: %d of %d", status.label or "Moving", status.done, status.total)
   end

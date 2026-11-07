@@ -223,6 +223,7 @@ Core:On("ADDON_LOADED", D, function(_, name)
   D.db.itemMarks = D.db.itemMarks or {}  -- [itemId] = "junk" | "keep"
   D.db.collapsed = D.db.collapsed or {}  -- [group key] = true
   D.db.assign = D.db.assign or {}        -- [itemId] = group key, chosen in Edit layout
+  D.db.names = D.db.names or {}          -- [group key] = the player's name for it
   D.db.chars = D.db.chars or {}
   D.db.probe = D.db.probe or {}
 end)

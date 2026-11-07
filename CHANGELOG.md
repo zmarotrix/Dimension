@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0, 2026-11-06
+
+- **Rename groups:** in Edit layout, click a group's title, type and press Enter. Escape cancels, and a blank name goes back to the usual one.
+- **Drag items between groups** in Edit layout. It only moves a picture, so nothing can be dropped or sold by accident. Clicking an item still
+  opens the menu of groups, and item tooltips now show while editing.
+- Each group's area is tinted while editing, and empty groups have room to drop on.
+- Reset now puts names back too.
+
 ## 0.11.7, 2026-11-06
 
 - Fixed: Edit layout could refuse with a message about restrictions when you weren't fighting. Only combat stops it now.
