@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.0, 2026-11-06
+
+- **A bar under the title shows how full your bags are** at a glance: green, through yellow at 60%, to red by 95%.
+- **Empty always shows its slot and count.** Clicking its title could close it, leaving "+ Empty (0)". It no longer closes, and if it was closed
+  it opens again. With full bags it stays and says 0.
+- **Drag group titles in Edit layout** to move groups: onto another group to sit beside it, or onto the strip at the bottom for a new row. A line
+  shows where it will land. This replaces the arrow buttons, so editing now draws groups at their real size.
+- Dragging an item lights up the group it would land in. Dropping in a gap counts as the nearest group on that line, and dropping an item back
+  on its own group changes nothing.
+- A drag ends properly if the game misses the mouse being let go, and nothing rearranges under it.
+
 ## 0.12.0, 2026-11-06
 
 - **Rename groups:** in Edit layout, click a group's title, type and press Enter. Escape cancels, and a blank name goes back to the usual one.

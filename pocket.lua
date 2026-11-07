@@ -31,14 +31,16 @@ local TILE_SCALE = TILE / NATIVE_TILE
 local GROUP_GAP = 8         -- pixels between groups in a row
 local ROW_GAP = 3
 local WRAP_AT = 8           -- a group up to this many items stays on one line
-local ARROW = 14
-local MAX_ROW = 7
 local PAD = 6
 local HEADER_H = 16
 local WINDOW_HEAD, FOOT = 32, 24
 local BODY_MARGIN = 4
 local RENAME_W, RENAME_LETTERS = 110, 24
 local ZONE_ALPHA = .12      -- how strongly a group's area shows in Edit layout
+local ZONE_HOT = .35        -- and the one a drag would land in
+local NEW_ROW_H = 20        -- the strip under the groups in Edit layout: drop a group there for a row of its own
+local FILL_H = 5            -- the bar showing how full the bags are
+local FILL_YELLOW, FILL_RED = .6, .95   -- how full it is at each colour: half-full bags are nothing to worry about
 local BUTTON_H, BUTTON_PAD = 18, 12
 local SCREEN_SHARE = .8     -- the most of the screen it takes before it scrolls
 local KEYRING = -1          -- Enum.BagIndex.Keyring: the game's own frame keeps showing it
@@ -67,7 +69,8 @@ local win
 local holders, buttons = {}, {}     -- [bag] = holder frame; [bag][slot] = button
 local headers, freeLabels, catchers, zones = {}, {}, {}, {}
 local groupRects = {}       -- where each group is drawn, to know what an item was dropped on
-local ghost, draggedAt
+local ghost, draggedAt, dropMark, newRowStrip
+local drag                  -- what's being dragged: { item = id, from = group } or { group = key }
 local editing = false
 local dirty = false
 local openedAt
@@ -109,33 +112,6 @@ function Pocket.Arrangement()
     return a.order < b.order
   end)
   return out
-end
-
----Moves a group "left", "right", "up" or "down" and saves where everything now sits.
-function Pocket:MoveGroup(key, direction)
-  local list = self.Arrangement()
-  local at
-  for i, entry in ipairs(list) do
-    if entry.key == key then at = i end
-  end
-  if not at then return end
-  local entry = list[at]
-  if direction == "up" then
-    entry.row = math.max(0, entry.row - 1)
-  elseif direction == "down" then
-    entry.row = math.min(MAX_ROW, entry.row + 1)
-  else
-    local other = list[direction == "left" and at - 1 or at + 1]
-    if other and other.row == entry.row then entry.order, other.order = other.order, entry.order end
-  end
-  table.sort(list, function(a, b)
-    if a.row ~= b.row then return a.row < b.row end
-    return a.order < b.order
-  end)
-  local saved = {}
-  for i, e in ipairs(list) do saved[i] = { key = e.key, row = e.row } end
-  D.db.layout = saved
-  self:Layout(true)
 end
 
 local function labelOf(g) return D.db.names[g.key] or g.label end
@@ -204,7 +180,7 @@ function Pocket:Sections()
     local g = GROUP_BY_KEY[place.key]
     local items = filled[g.key]
     table.sort(items, byQuality)
-    if #items > 0 or (g.empty and #free > 0) or editing then
+    if #items > 0 or g.empty or editing then
       out[#out + 1] = { key = g.key, label = labelOf(g), ours = g.ours, row = place.row, empty = g.empty, items = items }
     end
   end
@@ -316,23 +292,21 @@ local function headerFor(i)
   h:RegisterForClicks("LeftButtonUp")
   h.label = UI.Text(h, "title", 11, C.goldSoft)
   h.label:SetPoint("LEFT", 0, 0)
+  h:EnableMouse(true)
+  h:RegisterForDrag("LeftButton")
   h:SetScript("OnClick", function(self)
+    if draggedAt == GetTime() then return end   -- letting go of a drag isn't a click
     if editing then
       Pocket:StartRename(self)
-      return
+    elseif not self.empty then   -- Empty stays open: its count is the point of it
+      D.db.collapsed[self.key] = not D.db.collapsed[self.key] or nil
+      Pocket:Layout(true)
     end
-    D.db.collapsed[self.key] = not D.db.collapsed[self.key] or nil
-    Pocket:Layout(true)
   end)
-  h.arrows = {}
-  local previous
-  for _, spec in ipairs({ { "down", "v" }, { "up", "^" }, { "right", ">" }, { "left", "<" } }) do
-    local a = UI.Button(h, spec[2], "quiet", function() Pocket:MoveGroup(h.key, spec[1]) end)
-    a:SetSize(ARROW, ARROW)
-    if previous then a:SetPoint("RIGHT", previous, "LEFT", -1, 0) else a:SetPoint("RIGHT", 0, 0) end
-    previous = a
-    h.arrows[spec[1]] = a
-  end
+  h:SetScript("OnDragStart", function(self)
+    if editing then Pocket:StartGroupDrag(self) end
+  end)
+  h:SetScript("OnDragStop", function() Pocket:StopDrag() end)
   headers[i] = h
   return h
 end
@@ -344,13 +318,14 @@ local function catcherFor(i)
   if c then return c end
   c = CreateFrame("Button", nil, win.scroll.content)
   c:SetSize(TILE, TILE)
+  c:EnableMouse(true)
   c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   c:RegisterForDrag("LeftButton")
   c:SetScript("OnClick", function(self)
     if draggedAt ~= GetTime() then Pocket:ChooseGroup(self.itemId, self) end   -- letting go of a drag isn't a click
   end)
   c:SetScript("OnDragStart", function(self) Pocket:StartItemDrag(self) end)
-  c:SetScript("OnDragStop", function() Pocket:StopItemDrag() end)
+  c:SetScript("OnDragStop", function() Pocket:StopDrag() end)
   -- it covers the game's button, so it has to show what the item is
   c:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -389,41 +364,205 @@ function Pocket.GroupAt(x, y)
 end
 Pocket.groupRects = groupRects
 
--- Dragging only moves a picture of the item: nothing is picked up, so the item can't be dropped anywhere by accident.
-function Pocket:StartItemDrag(catcher)
-  if not ghost then
-    ghost = CreateFrame("Frame", nil, UIParent)
-    ghost:SetSize(TILE, TILE)
-    ghost:SetFrameStrata("TOOLTIP")
-    ghost:EnableMouse(false)
-    ghost.icon = ghost:CreateTexture(nil, "ARTWORK")
-    ghost.icon:SetAllPoints()
-    ghost:SetScript("OnUpdate", function(self)
-      local x, y = GetCursorPosition()
-      local scale = UIParent:GetEffectiveScale()
-      self:ClearAllPoints()
-      self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
-    end)
+---The groups on the line drawn at this height, left to right, or nil below the last line.
+local function lineAt(y)
+  local top
+  for _, r in ipairs(groupRects) do
+    if not top or r.y >= y then top = r.y end
   end
-  local info = D.Read(catcher.bag, catcher.slot)
-  ghost.itemId = catcher.itemId
-  ghost.icon:SetTexture(info and info.iconFileID)
-  ghost:Show()
-  GameTooltip:Hide()
+  local line, tallest = {}, 0
+  for _, r in ipairs(groupRects) do
+    if r.y == top then
+      line[#line + 1] = r
+      tallest = math.max(tallest, r.h)
+    end
+  end
+  if top and y >= top - tallest - ROW_GAP then return line end
 end
 
-function Pocket:StopItemDrag()
-  if not (ghost and ghost:IsShown()) then return end
-  ghost:Hide()
-  draggedAt = GetTime()
+---The group an item dropped here goes to: the one under it, or the closest on that line, since groups on a line
+---differ in height and have gaps between them.
+function Pocket.GroupNear(x, y)
+  local exact = Pocket.GroupAt(x, y)
+  if exact then return exact end
+  local best, bestGap
+  for _, r in ipairs(lineAt(y) or {}) do
+    local gap = x < r.x and r.x - x or x - (r.x + r.w)
+    if not bestGap or gap < bestGap then best, bestGap = r.key, gap end
+  end
+  return best
+end
+
+---Where a group dropped here goes: { key, before } beside another group, or { newRow = true } below them all.
+function Pocket.DropSpot(x, y)
+  local line = lineAt(y)
+  if not line then return { newRow = true } end
+  for _, r in ipairs(line) do
+    if x < r.x + r.w / 2 then return { key = r.key, before = true } end
+  end
+  return line[#line] and { key = line[#line].key, before = false } or { newRow = true }
+end
+
+---Moves a group to a place from DropSpot and saves where everything now sits, with rows numbered from nothing up.
+function Pocket:PlaceGroup(key, spot)
+  if spot.key == key then return false end
+  local list, moved = {}, nil
+  for _, entry in ipairs(self.Arrangement()) do
+    if entry.key == key then moved = entry else list[#list + 1] = entry end
+  end
+  if not moved then return false end
+  local at
+  for i, entry in ipairs(list) do
+    if entry.key == spot.key then at = i end
+  end
+  if spot.newRow then
+    moved.row = list[#list].row + 1
+    list[#list + 1] = moved
+  elseif at then
+    moved.row = list[at].row
+    table.insert(list, spot.before and at or at + 1, moved)
+  else
+    return false
+  end
+  local saved, row, last = {}, -1, nil
+  for i, entry in ipairs(list) do
+    if entry.row ~= last then row, last = row + 1, entry.row end
+    saved[i] = { key = entry.key, row = row }
+  end
+  D.db.layout = saved
+  self:Layout(true)
+  return true
+end
+
+---Where the mouse is in the window's contents: x to the right, y negative going down. Nil outside the window.
+local function contentPoint()
   if not win.scroll:IsMouseOver() then return end
   local content = win.scroll.content
   local left, top = content:GetLeft(), content:GetTop()
   if not (left and top) then return end
   local x, y = GetCursorPosition()
   local scale = content:GetEffectiveScale()
-  local key = self.GroupAt(x / scale - left, y / scale - top)
-  if key then self:PlaceItem(ghost.itemId, key) end
+  return x / scale - left, y / scale - top
+end
+
+---Shows where a drag would land: the group an item goes to, or the gap or strip a group goes to.
+local function paintDropTarget(x, y)
+  local hot, markRect, markBefore, strip
+  if x and drag and drag.item then
+    hot = Pocket.GroupNear(x, y)
+    if hot == drag.from or (hot and GROUP_BY_KEY[hot].empty) then hot = nil end
+  elseif x and drag then
+    local spot = Pocket.DropSpot(x, y)
+    strip = spot.newRow
+    if spot.key and spot.key ~= drag.group then
+      markBefore = spot.before
+      for _, r in ipairs(groupRects) do
+        if r.key == spot.key then markRect = r end
+      end
+    end
+  end
+  for _, z in ipairs(zones) do z:SetAlpha(z.group == hot and ZONE_HOT or ZONE_ALPHA) end
+  if newRowStrip then newRowStrip.fill:SetAlpha(strip and ZONE_HOT or ZONE_ALPHA) end
+  if not dropMark then
+    dropMark = UI.Tex(win.scroll.content, "ARTWORK", 0, C.gold)
+    dropMark:SetWidth(2)
+    dropMark:Hide()
+  end
+  dropMark:SetShown(markRect ~= nil)
+  if markRect then
+    local markX = markBefore and math.max(0, markRect.x - GROUP_GAP / 2 - 1) or markRect.x + markRect.w + GROUP_GAP / 2 - 1
+    dropMark:ClearAllPoints()
+    dropMark:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", markX, markRect.y)
+    dropMark:SetHeight(markRect.h)
+  end
+end
+
+local function ghostFrame()
+  if ghost then return ghost end
+  ghost = CreateFrame("Frame", nil, UIParent)
+  ghost:SetFrameStrata("TOOLTIP")
+  ghost:EnableMouse(false)
+  ghost.icon = ghost:CreateTexture(nil, "ARTWORK")
+  ghost.icon:SetAllPoints()
+  ghost.box = UI.Box(ghost, "BACKGROUND", 0)
+  ghost.box:Set(C.frameGold, C.stone)
+  ghost.label = UI.Text(ghost, "title", 11, C.text)
+  ghost.label:SetPoint("CENTER")
+  ghost:SetScript("OnUpdate", function(self)
+    -- the client doesn't always say when a drag ends, such as when the game loses focus
+    local held = rawget(_G, "IsMouseButtonDown")
+    if held and not held("LeftButton") then
+      Pocket:StopDrag()
+      return
+    end
+    local x, y = GetCursorPosition()
+    local scale = UIParent:GetEffectiveScale()
+    self:ClearAllPoints()
+    self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+    paintDropTarget(contentPoint())
+  end)
+  Pocket.ghost = ghost
+  return ghost
+end
+
+-- Dragging only moves a picture: nothing is picked up, so an item can't be dropped anywhere by accident.
+local function startDrag(what, picture, label)
+  local g = ghostFrame()
+  drag = what
+  g.icon:SetShown(picture ~= nil)
+  g.icon:SetTexture(picture)
+  g.box.border:SetShown(label ~= nil)
+  g.box.fill:SetShown(label ~= nil)
+  g.label:SetText(label or "")
+  if label then
+    g:SetSize((g.label:GetStringWidth() or 0) + 12, HEADER_H + 2)
+  else
+    g:SetSize(TILE, TILE)
+  end
+  g:Show()
+  GameTooltip:Hide()
+end
+
+function Pocket:StartItemDrag(catcher)
+  local id, from, bag, slot = catcher.itemId, catcher.group, catcher.bag, catcher.slot
+  self:EndRename(true)
+  local info = D.Read(bag, slot)
+  startDrag({ item = id, from = from }, info and info.iconFileID or 134400)
+end
+
+function Pocket:StartGroupDrag(header)
+  local key = header.key
+  self:EndRename(true)
+  startDrag({ group = key }, nil, labelOf(GROUP_BY_KEY[key]))
+end
+
+---Lets go. Dropping outside the window, or back where it was, changes nothing.
+function Pocket:StopDrag()
+  if not drag then return end
+  local x, y = contentPoint()
+  paintDropTarget(nil)
+  local what = drag
+  drag = nil
+  ghost:Hide()
+  draggedAt = GetTime()
+  local done = false
+  if x and what.item then
+    local key = self.GroupNear(x, y)
+    if key and key ~= what.from then done = self:PlaceItem(what.item, key) end
+  elseif x then
+    done = self:PlaceGroup(what.group, self.DropSpot(x, y))
+  end
+  -- so a drag that didn't do what it should can be looked into from the saved file
+  D.db.probe.lastDrag = { what = what.item and "item" or "group", over = x ~= nil, done = done, x = x, y = y, at = D.Now() }
+  if dirty then self:Layout() end
+end
+
+---Drops nothing and forgets the drag, for when the window is closing under it.
+local function cancelDrag()
+  if not drag then return end
+  drag = nil
+  ghost:Hide()
+  paintDropTarget(nil)
 end
 
 -- One box for typing a group's name, put over the title that was clicked.
@@ -479,7 +618,10 @@ function Pocket:SetEditing(on)
     D:Print("Not in combat.")
     return false
   end
-  if not on then self:EndRename(true) end
+  if not on then
+    cancelDrag()
+    self:EndRename(true)
+  end
   editing = on and true or false
   win.edit:SetLabel(editing and "Done" or "Edit layout")
   win.reset:SetShown(editing)
@@ -505,6 +647,8 @@ local function freeLabel(i)
   l:EnableMouse(false)
   l.text = UI.Text(l, "bold", 13, C.muted, "OVERLAY")
   l.text:SetPoint("CENTER")
+  l.none = UI.Tex(l, "BACKGROUND", 0, C.inset)   -- stands in for a slot when there are none to show
+  l.none:SetAllPoints()
   freeLabels[i] = l
   return l
 end
@@ -536,7 +680,8 @@ end
 ---freeze, such as opening or a click on a section's title; only buttons the game has locked stop it.
 function Pocket:Layout(now)
   if not win then return end
-  local allowed = canLayout() or (now and not buttonsLocked())
+  -- moving or hiding what's being dragged would end the drag
+  local allowed = not drag and (canLayout() or (now and not buttonsLocked()))
   if not allowed then
     dirty = true
     drawAll()
@@ -568,15 +713,14 @@ function Pocket:Layout(now)
   for _, s in ipairs(sections) do
     usedHeaders = usedHeaders + 1
     local h = headerFor(usedHeaders)
-    local shut = D.db.collapsed[s.key] and not editing
-    local count = s.empty and #free or #s.items
-    h.key = s.key
-    h.label:SetText(shut and string.format("+ %s (%d)", s.label, s.empty and 0 or #s.items) or s.label)
+    local shut = D.db.collapsed[s.key] and not editing and not s.empty
+    local count = s.empty and math.max(#free, 1) or #s.items
+    h.key, h.empty = s.key, s.empty
+    h.label:SetText(shut and string.format("+ %s (%d)", s.label, #s.items) or s.label)
     h.label:SetTextColor(unpack(s.ours and UI.Accent("dimension") or C.goldSoft))
-    for _, a in pairs(h.arrows) do a:SetShown(editing) end
 
     -- wide enough for its title, then its items: long groups fold to two lines
-    local titleWidth = (h.label:GetStringWidth() or 0) + 6 + (editing and 4 * (ARROW + 1) or 0)
+    local titleWidth = (h.label:GetStringWidth() or 0) + 6
     local shown = shut and 0 or count
     local columns = shown <= WRAP_AT and shown or math.ceil(shown / 2)
     columns = math.min(COLS, math.max(columns, math.ceil(titleWidth / step)))
@@ -608,6 +752,18 @@ function Pocket:Layout(now)
           l:SetPoint("TOPLEFT", b, "TOPLEFT")
           l:SetFrameLevel((b:GetFrameLevel() or 1) + 4)
           l.text:SetText(tostring(group.count))
+          l.text:SetTextColor(unpack(C.muted))
+          l.none:Hide()
+          l:Show()
+        end
+        if #free == 0 then
+          -- full: no slot to show, but the count still says so
+          local l = freeLabel(1)
+          l:ClearAllPoints()
+          l:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, top)
+          l.text:SetText("0")
+          l.text:SetTextColor(unpack(C.impossible))
+          l.none:Show()
           l:Show()
         end
       else
@@ -622,7 +778,7 @@ function Pocket:Layout(now)
           if editing then
             usedCatchers = usedCatchers + 1
             local c = catcherFor(usedCatchers)
-            c.itemId, c.bag, c.slot = item.id, item.bag, item.slot
+            c.itemId, c.bag, c.slot, c.group = item.id, item.bag, item.slot, s.key
             c:ClearAllPoints()
             c:SetPoint("TOPLEFT", b, "TOPLEFT")
             c:SetFrameLevel((b:GetFrameLevel() or 1) + 5)
@@ -637,6 +793,7 @@ function Pocket:Layout(now)
     lineHeight = math.max(lineHeight, groupHeight)
     groupRects[#groupRects + 1] = { key = s.key, x = x, y = y, w = pixels, h = groupHeight }
     local zone = zoneFor(usedHeaders)
+    zone.group = s.key
     zone:ClearAllPoints()
     zone:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
     zone:SetSize(pixels, groupHeight)
@@ -654,8 +811,26 @@ function Pocket:Layout(now)
 
   -- it fits its contents until it would take too much of the screen
   local height = -(y - lineHeight)
+  if editing then
+    if not newRowStrip then
+      newRowStrip = CreateFrame("Frame", nil, win.scroll.content)
+      newRowStrip:EnableMouse(false)
+      newRowStrip.fill = UI.Tex(newRowStrip, "BACKGROUND", 0, C.frameGold)
+      newRowStrip.fill:SetAllPoints()
+      newRowStrip.fill:SetAlpha(ZONE_ALPHA)
+      newRowStrip.text = UI.Text(newRowStrip, "body", 11, C.muted)
+      newRowStrip.text:SetPoint("CENTER")
+      newRowStrip.text:SetText("Drop a title here for a new row")
+      Pocket.newRowStrip = newRowStrip
+    end
+    newRowStrip:ClearAllPoints()
+    newRowStrip:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", 0, -height - ROW_GAP)
+    newRowStrip:SetSize(width, NEW_ROW_H)
+    height = height + ROW_GAP + NEW_ROW_H
+  end
+  if newRowStrip then newRowStrip:SetShown(editing) end
   win.scroll.content:SetSize(width, height)
-  local chrome = WINDOW_HEAD + FOOT + 2 * BODY_MARGIN
+  local chrome = WINDOW_HEAD + FOOT + 3 * BODY_MARGIN + FILL_H
   win:SetSize(width + 2 * PAD, math.min(height + chrome, GetScreenHeight() * SCREEN_SHARE))
   self:DrawFooter()
 end
@@ -668,13 +843,29 @@ local function fitFooterButtons()
   end
 end
 
+---The fill bar's colour for how full the bags are, 0 to 1: green, through yellow, to red.
+function Pocket.FillColor(share)
+  if share <= FILL_YELLOW then return UI.Mix(C.easy, C.fair, share / FILL_YELLOW) end
+  return UI.Mix(C.fair, C.impossible, math.min(1, (share - FILL_YELLOW) / (FILL_RED - FILL_YELLOW)))
+end
+
+local function drawFillBar(free, total)
+  local share = total > 0 and (total - free) / total or 0
+  local full = COLS * (TILE + GAP) - GAP
+  local c = Pocket.FillColor(share)
+  win.fill:SetColorTexture(c[1], c[2], c[3], 1)
+  win.fill:SetWidth(math.max(1, full * share))
+  win.fill:SetShown(share > 0)      -- a texture with no width stretches to its anchors
+end
+
 function Pocket:DrawFooter()
   fitFooterButtons()
   local totalFree, total = D.FreeSlots()
   win:SetSub(string.format("%d of %d free", totalFree, total))
+  drawFillBar(totalFree, total)
   win.money:SetText(editing and "" or D.Coins(D.Global("GetMoney") or 0))   -- the hint needs the room
   local status = D.Mover:Status()
-  local text = editing and "Drag items between groups. Click a title to rename it." or ""
+  local text = editing and "Drag titles and items to move them. Click a title to rename it." or ""
   if status then
     text = status.paused and ("Paused: " .. status.paused) or string.format("%s: %d of %d", status.label or "Moving", status.done, status.total)
   end
@@ -711,7 +902,14 @@ local function build()
   win.search:SetSize(150, 22)
   win.search:SetPoint("RIGHT", win.close, "LEFT", -8, 0)
   win.scroll = UI.ScrollArea(win.body)
-  win.scroll:SetPoint("TOPLEFT", PAD, -BODY_MARGIN)
+  win.fillTrack = UI.Tex(win.body, "ARTWORK", 0, C.track)
+  win.fillTrack:SetPoint("TOPLEFT", PAD, -BODY_MARGIN)
+  win.fillTrack:SetPoint("TOPRIGHT", -PAD, -BODY_MARGIN)
+  win.fillTrack:SetHeight(FILL_H)
+  win.fill = UI.Tex(win.body, "ARTWORK", 1, C.easy)
+  win.fill:SetPoint("TOPLEFT", win.fillTrack, "TOPLEFT")
+  win.fill:SetHeight(FILL_H)
+  win.scroll:SetPoint("TOPLEFT", PAD, -(2 * BODY_MARGIN + FILL_H))
   win.scroll:SetPoint("BOTTOMRIGHT", -PAD, BODY_MARGIN)
   win.money = UI.Text(win.footer, "bold", 14, { 1, 1, 1 })
   win.money:SetPoint("LEFT", 12, 0)
