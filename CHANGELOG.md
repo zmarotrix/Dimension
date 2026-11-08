@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0, 2026-11-07
+
+- Built on NorgannonDB Core 1.20: `Core:NewAddon` for the setup, Core's client calls, and `Core:Restricted` for when
+  nothing may move (the same rule as before: combat, an encounter, M+ or a PvP match). Same commands; `/dim help` lists
+  them.
+- The "Show the minimap button" setting is gone: NorgannonDB > Minimap pins any add-on.
+- Settings asked for in combat open when the fight ends.
+
 ## 0.13.2, 2026-11-06
 
 - The fill bar now sits under the items, and a setting turns it off: "The bar showing how full your bags are" in `/dim settings`.

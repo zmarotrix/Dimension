@@ -48,9 +48,6 @@ Core:OnLogin(function()
 
   list:Header("How it starts")
   list:Buttons("First-run choices", "Choose how much it does by itself again.", { { "Show them", function() D.Window:ShowWelcome() end } })
-  list:Toggle("Show the minimap button", "Dimension is also in the game's addon menu and opens with /dim.",
-    function() return Core.MinimapButton:IsShown("dimension") end,
-    function(on) Core.MinimapButton:SetShown("dimension", on) end)
 
   list:Header("Marks")
   list:Buttons("Junk and Keep marks", "They apply across the account.", { { "Forget them all", function() StaticPopup_Show("DIMENSION_FORGET_MARKS") end } })
@@ -66,7 +63,7 @@ Core:OnLogin(function()
 
   page:SetScript("OnShow", function() list:Refresh() end)
   D.settingsPage, D.settingsList = page, list
-  D.settingsCategory = Core:AddSettingsPage(page, "Dimension")
+  D:AddSettingsPage(page)
 
   -- Dimension's hot paths for /norg perf (wrapped only while measuring)
   local function perf(label, tbl, method) Core:RegisterPerf("Dimension: " .. label, tbl, method, "dimension") end
@@ -77,11 +74,3 @@ Core:OnLogin(function()
   perf("window refresh", D.Window, "Refresh")
   perf("panels", D.Panels, "Refresh")
 end)
-
-function D:OpenSettings()
-  if self.settingsCategory and Settings and Settings.OpenToCategory then
-    Settings.OpenToCategory(self.settingsCategory:GetID())
-  else
-    Core:OpenSettings()
-  end
-end

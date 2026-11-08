@@ -4,56 +4,71 @@
 
 local ADDON = ...
 local Core = NorgannonCore
-local DB = NorgannonDB
 
-Dimension = { addonName = ADDON or "Dimension" }
-local D = Dimension
-
-if not (Core and Core:Require(1, 16)) or not (DB and DB:RequireSchema(1, 4)) then
-  D.disabled = true
-  C_Timer.After(5, function()
-    print("|cfff08a9dDimension|r needs NorgannonDB 1.4 and NorgannonDB Core 1.16 or newer; it is turned off.")
-  end)
+if not (Core and Core.NewAddon) then
+  Dimension = { disabled = true }
+  print("Dimension needs NorgannonDB Core 1.20 or newer; it is turned off.")
   return
 end
 
-D.PREFIX = "|cfff08a9dDimension|r"
-function D:Print(msg) Core:Print(msg, self.PREFIX) end
+Dimension = {}
+local D = Dimension
 
 -------------------------------------------------------------------------------------------
--- Calling the client. Docs list calls for every game flavour, so any may be missing or refuse on
+-- Saved data: rules and marks are account-wide, lists and pins belong to a character
+-------------------------------------------------------------------------------------------
+
+-- Automation is off until the first-run choice (suite plan, decision 5); the first two only say
+-- what can go, and `overCap` and `destroy` are the two things that take a clear opt-in
+local RULES = {
+  grey = true, marked = true, cantUse = false, noRecipe = false, altKeep = true,
+  autoSell = false, repair = false, merge = false, autoBank = false, tidyAfter = false, buy = false,
+  overCap = false, destroy = false,
+}
+
+D.DEFAULTS = {
+  first = true,        -- the first-run presets haven't been answered
+  tooltips = true,     -- the verdict and reason, in item tooltips
+  pocket = true,       -- the sectioned bag window, instead of the game's bags
+  strip = true,        -- the strip beside the game's bags, when they're showing
+  marks = true,        -- the small marks on bag slots
+  fillBar = true,      -- the bar under the items showing how full the bags are
+  buyCap = 10000,      -- copper a vendor visit may spend from the carry list (1g)
+  mergeAt = 6,         -- merge stacks by itself at this many free slots or fewer
+  sellMethod = "cursor",
+  itemMarks = {},      -- [itemId] = "junk" | "keep"
+  collapsed = {},      -- [group key] = true
+  assign = {},         -- [itemId] = group key, chosen in Edit layout
+  names = {},          -- [group key] = the player's name for it
+  chars = {},          -- ["Realm-Name"] = a character's lists, pins and history
+  probe = {},
+}
+D.DEFAULTS.rules = RULES
+
+-- The suite's plumbing (Core:NewAddon): version checks, DimensionDB with its defaults, the slash command, the minimap
+-- row and the add-on menu. Left-click and /dim open the window; right-click opens settings.
+Core:NewAddon("dimension", {
+  folder = ADDON, api = { 1, 20 }, data = { 1, 4 },
+  db = "DimensionDB", defaults = D.DEFAULTS,
+  slash = { "/dim", "/dimension" },
+  commands = {
+    bags = { function()
+      D.Pocket:SetEnabled(not D.db.pocket)
+      D:Print(D.db.pocket and "Using Dimension's bag window." or "Using the game's own bags.")
+    end, "switch between Dimension's bag window and the game's own bags" },
+    tidy = { function() D.Tidy:Run() end, "tidy your bags" },
+    room = { function() D.Window:Open("room") end, "what would free space" },
+    probe = { function(rest) D.Probe:Run(rest ~= "" and string.lower(rest) or nil) end, "[sell | move | sort]: check what the client allows" },
+  },
+})
+if D.disabled then return end
+
+-------------------------------------------------------------------------------------------
+-- Calling the client: Core's helpers. Docs list calls for every game flavour, so any may be missing or refuse on
 -- Forever: nothing assumes one works, and a secret value counts as no answer.
 -------------------------------------------------------------------------------------------
 
-local function clean(ok, ...)
-  if not ok then return nil end
-  local n = select("#", ...)
-  if n == 0 then return nil end
-  local out = { ... }
-  for i = 1, n do
-    if Core.IsSecret(out[i]) then out[i] = nil end
-  end
-  return unpack(out, 1, n)
-end
-
----The global function name(...), with errors and secret values turned into nil.
-function D.Global(name, ...)
-  local fn = rawget(_G, name)
-  if not fn then return nil end
-  return clean(pcall(fn, ...))
-end
-
----The namespaced client function ns.name(...): D.In("C_Bank", "CanViewBank").
-function D.In(ns, name, ...)
-  local t = rawget(_G, ns)
-  local fn = t and t[name]
-  if not fn then return nil end
-  return clean(pcall(fn, ...))
-end
-
-function D.Now()
-  return D.Global("GetServerTime") or time()
-end
+D.Global, D.In, D.Now = Core.Global, Core.In, Core.Now
 
 ---What's in a slot, as the client's table, or nil. A table holding secrets counts as nothing there.
 function D.Read(bag, slot)
@@ -103,21 +118,14 @@ end
 -- When not to touch anything
 -------------------------------------------------------------------------------------------
 
--- The client's restriction kinds that mean a fight or match. The others don't stop items moving: Chat is only
--- add-on chat, and Map is being on a map with restrictions. Checking every kind stopped selling at a vendor out of a
--- fight (Maro, 2026-11-06); db.probe.restrictionsAtVendor will say which kind it was.
-local FIGHTS = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" }
-
----Why nothing may move right now, or nil. No bag call is flagged as blocked in combat, but a slot
----shifting under someone mid-fight is never what they want, so everything stops regardless.
+---Why nothing may move right now, or nil: Core:Restricted("fight"), which is combat, an encounter, M+ or a PvP match.
+---Chat and Map restrictions don't stop items moving: checking every kind stopped selling at a vendor out of a fight
+---(Maro, 2026-11-06). No bag call is flagged as blocked in combat, but a slot shifting under someone mid-fight is never
+---what they want, so everything stops regardless.
 function D.PauseReason()
-  if D.Global("InCombatLockdown") then return "in combat" end
-  local kinds = rawget(_G, "Enum") and Enum.AddOnRestrictionType
-  if kinds then
-    for _, name in ipairs(FIGHTS) do
-      if kinds[name] and D.In("C_RestrictedActions", "IsAddOnRestrictionActive", kinds[name]) then return "a fight or match is under way" end
-    end
-  end
+  local why = Core:Restricted("fight")
+  if why == "combat" then return "in combat" end
+  if why then return "a fight or match is under way" end
   return nil
 end
 
@@ -141,34 +149,6 @@ end
 -- Saved data: rules and marks are account-wide, lists and pins belong to a character
 -------------------------------------------------------------------------------------------
 
-local DEFAULTS = {
-  first = true,        -- the first-run presets haven't been answered
-  tooltips = true,     -- the verdict and reason, in item tooltips
-  pocket = true,       -- the sectioned bag window, instead of the game's bags
-  strip = true,        -- the strip beside the game's bags, when they're showing
-  marks = true,        -- the small marks on bag slots
-  fillBar = true,      -- the bar under the items showing how full the bags are
-  buyCap = 10000,      -- copper a vendor visit may spend from the carry list (1g)
-  mergeAt = 6,         -- merge stacks by itself at this many free slots or fewer
-  sellMethod = "cursor",
-}
--- Automation is off until the first-run choice (suite plan, decision 5); the first two only say
--- what can go, and `overCap` and `destroy` are the two things that take a clear opt-in
-local RULES = {
-  grey = true, marked = true, cantUse = false, noRecipe = false, altKeep = true,
-  autoSell = false, repair = false, merge = false, autoBank = false, tidyAfter = false, buy = false,
-  overCap = false, destroy = false,
-}
-local HISTORY_DAYS = 30
-local HISTORY_MAX = 300
-
-local function fill(target, defaults)
-  for k, v in pairs(defaults) do
-    if target[k] == nil then target[k] = v end
-  end
-  return target
-end
-
 -- the first-run presets: which rules each one turns on
 D.PRESETS = {
   show = { autoSell = false, repair = false, merge = false, autoBank = false, tidyAfter = false },
@@ -181,6 +161,9 @@ function D:ApplyPreset(key)
   self.db.first = false
   self:Changed()
 end
+
+local HISTORY_DAYS = 30
+local HISTORY_MAX = 300
 
 local function myKey()
   local name = D.Global("UnitName", "player") or "?"
@@ -213,21 +196,6 @@ function D:Log(what, detail, id, count, value)
   end
   self:Changed()
 end
-
-Core:On("ADDON_LOADED", D, function(_, name)
-  if name ~= D.addonName then return end
-  Core:Off("ADDON_LOADED", D)
-  local saved = rawget(_G, "DimensionDB")
-  DimensionDB = fill(type(saved) == "table" and saved or {}, DEFAULTS)
-  D.db = DimensionDB
-  D.db.rules = fill(D.db.rules or {}, RULES)
-  D.db.itemMarks = D.db.itemMarks or {}  -- [itemId] = "junk" | "keep"
-  D.db.collapsed = D.db.collapsed or {}  -- [group key] = true
-  D.db.assign = D.db.assign or {}        -- [itemId] = group key, chosen in Edit layout
-  D.db.names = D.db.names or {}          -- [group key] = the player's name for it
-  D.db.chars = D.db.chars or {}
-  D.db.probe = D.db.probe or {}
-end)
 
 ---Something changed that the marks, the strip or an open window shows.
 function D:Changed()
@@ -274,51 +242,6 @@ function D:Toggle()
   if not win then return end
   if win:IsShown() then win:Hide() else self.Window:Open() end
 end
-
-Core:RegisterAddon("dimension", {
-  version = C_AddOns and C_AddOns.GetAddOnMetadata(D.addonName, "Version") or "0.9.0",
-  open = function() D:Toggle() end,
-})
-
-SLASH_DIMENSION1 = "/dim"
-SLASH_DIMENSION2 = "/dimension"
-SlashCmdList["DIMENSION"] = function(msg)
-  local lower = string.lower(strtrim(msg or ""))
-  if lower == "" then
-    D:Toggle()
-  elseif lower == "settings" or lower == "options" then
-    D:OpenSettings()
-  elseif lower == "bags" then
-    D.Pocket:SetEnabled(not D.db.pocket)
-    D:Print(D.db.pocket and "Using Dimension's bag window." or "Using the game's own bags.")
-  elseif lower == "tidy" then
-    D.Tidy:Run()
-  elseif lower == "room" then
-    D.Window:Open("room")
-  elseif lower == "probe" or lower:match("^probe ") then
-    D.Probe:Run(lower:match("^probe%s+(%S+)"))
-  else
-    D:Print("/dim opens the window. Also: /dim bags, /dim tidy, /dim room, /dim settings, /dim probe [sell | move | sort]")
-  end
-end
-
--- the minimap button and the client's addon menu: click opens or closes, right-click the settings
-local function onClick(button)
-  if button == "RightButton" then D:OpenSettings() else D:Toggle() end
-end
-local function tooltip(tt)
-  tt:AddLine("Dimension", .941, .541, .616)
-  tt:AddLine("Your bags, looked after", 1, 1, 1)
-  tt:AddLine("Click: open or close  ·  Right-click: settings  ·  Drag: move", .43, .4, .32)
-end
-Core:OnLogin(function() Core.MinimapButton:Add("dimension", { onClick = onClick, tooltip = tooltip }) end)
-function Dimension_OnAddonCompartmentClick(_, button) onClick(button) end
-function Dimension_OnAddonCompartmentEnter(_, frame)
-  GameTooltip:SetOwner(frame, "ANCHOR_LEFT")
-  tooltip(GameTooltip)
-  GameTooltip:Show()
-end
-function Dimension_OnAddonCompartmentLeave() GameTooltip:Hide() end
 
 BINDING_HEADER_DIMENSION = "Dimension"
 BINDING_NAME_DIMENSION_TOGGLE = "Open or close Dimension"
