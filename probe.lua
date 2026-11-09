@@ -23,7 +23,7 @@ local CALLS = {
   "C_Container.SetBagSlotFlag", "C_Container.GetBagSlotFlag", "C_Container.GetContainerItemQuestInfo", "C_Container.GetContainerItemPurchaseInfo",
   "C_Container.GetContainerItemEquipmentSetInfo", "C_MerchantFrame.GetBuybackItemID", "C_MerchantFrame.GetItemInfo", "C_RestrictedActions.IsAddOnRestrictionActive",
   "C_Bank.FetchPurchasedBankTabData", "C_Item.GetItemFamily", "C_Item.GetItemMaxStackSizeByID", "SellCursorItem", "BuybackItem", "GetNumBuybackItems",
-  "CursorHasItem", "ClearCursor", "GetCursorInfo", "RepairAllItems", "GetRepairAllCost", "CanMerchantRepair", "BuyMerchantItem", "GetMerchantItemID", "GetMerchantItemMaxStack", "GetMouseFoci",
+  "CursorHasItem", "ClearCursor", "GetCursorInfo", "PutItemInBag", "GetInventoryItemID", "C_Container.ContainerIDToInventoryID", "C_TooltipInfo.GetBagItem", "StaticPopup_Visible", "RepairAllItems", "GetRepairAllCost", "CanMerchantRepair", "BuyMerchantItem", "GetMerchantItemID", "GetMerchantItemMaxStack", "GetMouseFoci",
 }
 
 local function exists(path)

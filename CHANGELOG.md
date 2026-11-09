@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.0, 2026-11-08
+
+- Swapping in a bigger bag. Drop a bag on one that still holds things and the game refuses; Dimension now moves
+  the old bag's items into your other bags and puts the new one in. If they won't fit it says how many slots to
+  free first ("Free 4 more slots first: your Linen Bag holds 6 items and your other bags have 2 slots free.") and
+  touches nothing. The old bag ends up where the new one was; nothing leaves your bags.
+- A bag you carry that's bigger than one you wear says so on its tooltip, gets a row in Make room with a Swap
+  button, and is named once in chat when it first turns up. `/dim swap` puts the best one in. It picks an empty
+  bag slot first, else your smallest bag. A profession bag only replaces one of its own kind, and an ordinary bag
+  never replaces a profession bag.
+- Settings: "Empty a bag for you when you swap in a bigger one", on by default.
+- `/dim probe` lists the calls this leans on: PutItemInBag, GetInventoryItemID, ContainerIDToInventoryID,
+  C_TooltipInfo.GetBagItem.
+
 ## 0.14.0, 2026-11-07
 
 - Built on NorgannonDB Core 1.20: `Core:NewAddon` for the setup, Core's client calls, and `Core:Restricted` for when

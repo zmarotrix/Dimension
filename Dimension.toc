@@ -3,7 +3,7 @@
 ## Category: NorgannonDB
 ## Notes: Your bags, looked after: sells what's safe, frees space when bags fill up, runs bank trips and keeps things in their places, and can always say why. Powered by NorgannonDB. /dim
 ## Author: Maro
-## Version: 0.14.0
+## Version: 0.15.0
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB, NorgannonDB_Core
 ## SavedVariables: DimensionDB
@@ -19,6 +19,7 @@ room.lua
 vendor.lua
 bank.lua
 tidy.lua
+bagswap.lua
 overlay.lua
 pocket.lua
 tooltips.lua

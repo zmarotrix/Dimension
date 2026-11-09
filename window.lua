@@ -168,6 +168,20 @@ local function fillRoom(f)
       right = list.slots > 0 and string.format("+%d %s", list.slots, list.slots == 1 and "slot" or "slots") or "",
       actions = { { text = "Do it", off = D.PauseReason() ~= nil or D.Mover:Active(), tip = D.PauseReason(), run = function() Room:FreeWithoutCost() end } } }
   end
+  local upgrades = D.Swap.Upgrades()
+  if #upgrades > 0 then
+    items[#items + 1] = { group = "Bigger bags you carry" }
+    for _, u in ipairs(upgrades) do
+      local busy = D.PauseReason() and ("Not while " .. D.PauseReason()) or (D.Mover:Active() and "Something else is moving items") or nil
+      items[#items + 1] = { id = u.new.id, link = u.new.link, title = "Swap in " .. u.new.name .. (u.new.size and (" (" .. u.new.size .. ")") or ""),
+        sub = u.plan.short > 0 and D.Swap.ShortText(u.plan)
+          or u.target.itemId and string.format("For your %s (%d). What's in it moves to your other bags", u.target.name, u.target.size)
+          or "Into your empty bag slot",
+        right = u.gain > 0 and string.format("+%d %s", u.gain, u.gain == 1 and "slot" or "slots") or "",
+        actions = { { text = "Swap", off = busy ~= nil or u.plan.short > 0, tip = busy or (u.plan.short > 0 and D.Swap.ShortText(u.plan)) or nil,
+          run = function() D.Swap:Best(u) end } } }
+    end
+  end
   if #list.sell > 0 then
     items[#items + 1] = { group = "Goes at the next vendor" }
     for _, e in ipairs(list.sell) do

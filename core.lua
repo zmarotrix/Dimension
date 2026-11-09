@@ -33,6 +33,8 @@ D.DEFAULTS = {
   strip = true,        -- the strip beside the game's bags, when they're showing
   marks = true,        -- the small marks on bag slots
   fillBar = true,      -- the bar under the items showing how full the bags are
+  bagSwap = true,      -- empty a bag for you when you swap in a bigger one
+  bagSizes = {},       -- [itemId] = slots, learnt from bags worn and tooltips
   buyCap = 10000,      -- copper a vendor visit may spend from the carry list (1g)
   mergeAt = 6,         -- merge stacks by itself at this many free slots or fewer
   sellMethod = "cursor",
@@ -58,6 +60,7 @@ Core:NewAddon("dimension", {
     end, "switch between Dimension's bag window and the game's own bags" },
     tidy = { function() D.Tidy:Run() end, "tidy your bags" },
     room = { function() D.Window:Open("room") end, "what would free space" },
+    swap = { function() D.Swap:Best() end, "put in the biggest bag you carry, emptying the one it replaces" },
     probe = { function(rest) D.Probe:Run(rest ~= "" and string.lower(rest) or nil) end, "[sell | move | sort]: check what the client allows" },
   },
 })
