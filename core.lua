@@ -7,7 +7,7 @@ local Core = NorgannonCore
 
 if not (Core and Core.NewAddon) then
   Dimension = { disabled = true }
-  print("Dimension needs NorgannonDB Core 1.20 or newer; it is turned off.")
+  print("Dimension needs Norgannon Core 1.20 or newer; it is turned off.")
   return
 end
 
