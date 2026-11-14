@@ -34,6 +34,7 @@ D.DEFAULTS = {
   marks = true,        -- the small marks on bag slots
   fillBar = true,      -- the bar under the items showing how full the bags are
   bagSwap = true,      -- empty a bag for you when you swap in a bigger one
+  putAway = true,      -- full ordinary bags: move what fits into the reagent and profession bags
   bagSizes = {},       -- [itemId] = slots, learnt from bags worn and tooltips
   buyCap = 10000,      -- copper a vendor visit may spend from the carry list (1g)
   mergeAt = 6,         -- merge stacks by itself at this many free slots or fewer

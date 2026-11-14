@@ -1,5 +1,9 @@
 -- Making room: first what costs nothing (merging partial stacks, putting things in the bag made for
--- them), then the list of the cheapest things to clear. Destroying sits last: DeleteCursorItem is
+-- them), then the list of the cheapest things to clear.
+--
+-- A free slot in the reagent bag, or a herb or soul bag, takes only what that bag is made for, so loot
+-- can fail with slots still free. When the ordinary bags fill, what belongs in a special bag moves there by
+-- itself (0.16.0), which opens an ordinary slot; Make room says when that can't help. Destroying sits last: DeleteCursorItem is
 -- restricted on this client, so it needs a real click, one per stack, and only ever comes from a
 -- button the player pressed.
 
@@ -12,6 +16,7 @@ D.Room = Room
 local Rules, Mover = D.Rules, D.Mover
 
 local AUTO_COOLDOWN = 5   -- seconds between looks at merging by itself
+local STUCK_COOLDOWN = 60 -- seconds between saying the only free slots are in special bags
 local TOSS_ROWS = 8
 local MAX_QUALITY_TO_TOSS = 1
 
@@ -75,6 +80,31 @@ function Room:MergePlan()
   return moves, freed, names
 end
 
+---True for a bag that only takes some things: the reagent bag, and profession bags.
+local function isSpecial(entry)
+  if entry.reagent then return true end
+  local _, family = D.In("C_Container", "GetContainerNumFreeSlots", entry.id)
+  return family ~= nil and family ~= 0
+end
+Room.IsSpecial = isSpecial
+
+---Free slots: in ordinary bags, then in bags that only take some things.
+function Room.FreeByKind()
+  local ordinary, special = 0, 0
+  for _, entry in ipairs(D.Carried()) do
+    local n = 0
+    for slot = 1, D.Size(entry.id) do
+      if not D.Read(entry.id, slot) then n = n + 1 end
+    end
+    if isSpecial(entry) then special = special + n else ordinary = ordinary + n end
+  end
+  return ordinary, special
+end
+
+-- items the game wouldn't put in a special bag this session, so they aren't tried again and again
+local refused = {}
+Room.refused = refused
+
 ---True if a container can hold the item. Reagent bags take only reagents and a special bag only its
 ---own family; asking the client saves a refused move later.
 function Room.Accepts(entry, id, family, isReagent)
@@ -91,8 +121,7 @@ end
 function Room:PutAwayPlan()
   local free, ordinary = {}, {}
   for _, entry in ipairs(D.Carried()) do
-    local _, bagFamily = D.In("C_Container", "GetContainerNumFreeSlots", entry.id)
-    if entry.reagent or (bagFamily and bagFamily ~= 0) then
+    if isSpecial(entry) then
       local slots = {}
       for slot = 1, D.Size(entry.id) do
         if not D.Read(entry.id, slot) then slots[#slots + 1] = slot end
@@ -105,7 +134,7 @@ function Room:PutAwayPlan()
   local moves = {}
   if #free == 0 then return moves end
   D.Each(ordinary, function(bag, slot, info)
-    if not info.isLocked and not pinned(bag, slot) then
+    if not info.isLocked and not pinned(bag, slot) and not refused[info.itemID] then
       local family = D.In("C_Item", "GetItemFamily", info.itemID)
       local isReagent = Rules.Facts(info.itemID).reagent
       for _, target in ipairs(free) do
@@ -132,28 +161,83 @@ function Room:FreeWithoutCost(onDone)
   end })
 end
 
+---Moves what belongs in a special bag there when the ordinary bags are full, so loot that only fits an
+---ordinary bag has somewhere to go. Nothing leaves your bags. why = "loot" after a loot that failed.
+---True if moves started.
+function Room:Shuffle(why)
+  if not (D.db and D.db.putAway) then return false end
+  if Mover:Active() or D.PauseReason() or D.CursorBusy() then return false end
+  if D.Vendor and D.Vendor.Selling and D.Vendor:Selling() then return false end
+  if (Room.FreeByKind()) > 0 then return false end
+  local moves = self:PutAwayPlan()
+  if #moves == 0 then return false end
+  local reagentOnly = true
+  for _, m in ipairs(moves) do
+    for _, entry in ipairs(D.Carried()) do
+      if entry.id == m.to[1] and not entry.reagent then reagentOnly = false end
+    end
+  end
+  return Mover:Run(moves, { label = "Filling your special bags", onDone = function(reason, moved)
+    -- what the game turned away stays where it was, and isn't tried again this session
+    for _, m in ipairs(moves) do
+      local from = D.Read(m.from[1], m.from[2])
+      if from and from.itemID == m.id and not D.Read(m.to[1], m.to[2]) then refused[m.id] = true end
+    end
+    if moved > 0 then
+      local where = reagentOnly and "your reagent bag" or "the bags made for them"
+      local what = moved == 1 and (reagentOnly and "1 reagent" or "1 item") or (moved .. (reagentOnly and " reagents" or " items"))
+      D:Log("Moved into special bags", string.format("%s into %s, to free ordinary slots. Nothing left your bags", what, where))
+      D:Print(string.format("Your bags were full, so %s went into %s.%s", what, where, why == "loot" and " Loot again." or ""))
+    end
+  end })
+end
+
+local lastStuck = 0
+
+---After loot that didn't fit: move things into special bags if that helps, or say why it can't.
+function Room:LootFull()
+  if self:Shuffle("loot") then return end
+  if Mover:Active() then return end
+  local ordinary, special = Room.FreeByKind()
+  if ordinary > 0 or special == 0 then return end
+  local now = GetTime()
+  if now - lastStuck < STUCK_COOLDOWN then return end
+  lastStuck = now
+  D:Print(string.format("Your only free %s in a reagent or profession bag, and nothing you carry fits there. Make room (/dim room) lists what to clear.",
+    special == 1 and "slot is" or "slots are"))
+end
+
 ---What Make room shows, cheapest way first:
----{ free = {moves, slots}, sell = Rules:SellList(), toss = { bag, slot, id, count, value } }.
+---{ free = {moves, slots}, sell = Rules:SellList(), toss = { bag, slot, id, count, value, special } }.
+---special marks a row in a reagent or profession bag: clearing it frees a slot only some things fit.
 function Room:List()
   local moves, freed = self:MergePlan()
   local away = self:PutAwayPlan()
   local toss = {}
+  local specialBag = {}
+  for _, entry in ipairs(D.Carried()) do specialBag[entry.id] = isSpecial(entry) end
   D.Each(D.Carried(), function(bag, slot, info)
     local verdict = Rules:Verdict(info.itemID, info, bag, slot)
     local facts = Rules.Facts(info.itemID)
     local price = facts.price or 0
     -- only ever things with a price the game told us, no better than white, that no rule wants
     if verdict == "stay" and price > 0 and not info.hasNoValue and (info.quality or facts.quality or 9) <= MAX_QUALITY_TO_TOSS then
-      toss[#toss + 1] = { bag = bag, slot = slot, id = info.itemID, count = info.stackCount or 1, value = price * (info.stackCount or 1), name = info.itemName, link = info.hyperlink }
+      toss[#toss + 1] = { bag = bag, slot = slot, id = info.itemID, count = info.stackCount or 1, value = price * (info.stackCount or 1), name = info.itemName, link = info.hyperlink,
+        special = specialBag[bag] or nil }
     end
   end)
+  -- with no ordinary slot free, a row that frees one comes before a row that frees a special one
+  local ordinaryFree, specialFree = Room.FreeByKind()
+  local preferOrdinary = ordinaryFree == 0 and #away == 0
   table.sort(toss, function(a, b)
+    if preferOrdinary and (a.special or false) ~= (b.special or false) then return not a.special end
     if a.value ~= b.value then return a.value < b.value end
     if a.bag ~= b.bag then return a.bag < b.bag end
     return a.slot < b.slot
   end)
   for i = #toss, TOSS_ROWS + 1, -1 do toss[i] = nil end
-  return { moves = #moves + #away, slots = freed + #away, sell = Rules:SellList(), toss = toss }
+  return { moves = #moves + #away, slots = freed + #away, sell = Rules:SellList(), toss = toss,
+    ordinaryFree = ordinaryFree, specialFree = specialFree, away = #away }
 end
 
 ---Destroys one stack. Only called from a button the player pressed, because the client refuses
@@ -207,4 +291,17 @@ Core:On("BAG_UPDATE_DELAYED", "dimension.room", function()
 end)
 Core:On("PLAYER_REGEN_ENABLED", "dimension.room", function()
   Core:NextFrame(look, "dimension.room")
+end)
+
+-- ordinary bags just filled: make room from the special ones before the next loot fails
+local function shuffleSoon()
+  Core:NextFrame(function() Room:Shuffle() end, "dimension.room.shuffle")
+end
+Core:On("BAG_UPDATE_DELAYED", "dimension.room.shuffle", shuffleSoon)
+Core:On("PLAYER_REGEN_ENABLED", "dimension.room.shuffle", shuffleSoon)
+Core:On("UI_ERROR_MESSAGE", "dimension.room", function(_, _, message)
+  local full = rawget(_G, "ERR_INV_FULL")
+  if message ~= nil and full ~= nil and message == full then
+    Core:NextFrame(function() Room:LootFull() end, "dimension.room.full")
+  end
 end)

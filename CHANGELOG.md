@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.16.0, 2026-11-13
+
+- Dropping a bag on the very bag it sits in now works: it moves out with the rest of that bag's items, goes in,
+  and the old bag lands in your other bags instead of trying to go inside itself.
+- Right-click a bag when every bag slot is full and the game refuses; Dimension now swaps it in over the bag it
+  would best replace, the same choice as `/dim swap`. Not at a vendor, bank, mailbox or trade, where a
+  right-click does something else.
+- A free slot in the reagent bag takes only reagents, so loot could fail with a slot still free. When your
+  ordinary bags fill, reagents and profession goods now move into the bags made for them by themselves, and the
+  chat says so ("Your bags were full, so 2 reagents went into your reagent bag. Loot again."). Only between your
+  own bags; a setting turns it off.
+- When nothing you carry fits the reagent bag, a failed loot says your only free slots are there, and Make room
+  shows it at the top, puts the rows that free an ordinary slot first, and marks rows in a special bag.
+
 ## 0.15.0, 2026-11-08
 
 - Swapping in a bigger bag. Drop a bag on one that still holds things and the game refuses; Dimension now moves

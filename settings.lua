@@ -39,6 +39,8 @@ Core:OnLogin(function()
     function() return D.db.marks end, function(on) D.db.marks = on D:Changed() end)
   list:Toggle("Empty a bag for you when you swap in a bigger one", "Drop a bag on one that still holds things and its items move to your other bags first. If they won't fit, you're told how many slots to free. Bigger bags you carry show in Make room and their tooltips.",
     function() return D.db.bagSwap end, function(on) D.db.bagSwap = on D:Changed() end)
+  list:Toggle("Move reagents into the reagent bag when your bags fill", "When your ordinary bags are full, reagents and profession goods move into the bags made for them, so the next loot has a slot. Only between your own bags.",
+    function() return D.db.putAway end, function(on) D.db.putAway = on D:Changed() end)
   list:Toggle("The verdict and reason in tooltips", nil,
     function() return D.db.tooltips end, function(on) D.db.tooltips = on end)
 

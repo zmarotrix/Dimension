@@ -5,6 +5,10 @@
 --   * Drop a bag on a bag slot whose bag still holds things, and the game refuses. Dimension notices, moves the
 --     old bag's items into your other bags, then puts the new bag in. If they won't fit, it says how many slots
 --     to free first and touches nothing.
+--   * That includes dropping a bag on the very bag it sits in: it moves out with the rest, and the old bag
+--     ends up in another bag's slot instead of inside itself.
+--   * Right-click a bag when every bag slot is full and the game refuses; Dimension swaps it in instead, over
+--     the bag it would best replace (the same choice as /dim swap).
 --   * A bag you carry that's bigger than one you wear says so on its tooltip, gets a row in Make room, and is
 --     named once in chat when it first turns up. /dim swap puts the best one in.
 --
@@ -23,6 +27,9 @@ local Room, Mover = D.Room, D.Mover
 local CONTAINER, QUIVER = 1, 11      -- Enum.ItemClass: the items that go in a bag slot
 local CHECK_AFTER = 1                -- seconds before checking the game really took the new bag
 local REFUSAL_WINDOW = 2             -- seconds a dropped bag's refusal is watched for
+local USE_WAIT = .5                  -- seconds after a right-click before looking at what the game did
+-- windows where a right-click on a bag does something else: sells it, banks it, trades it
+local ELSEWHERE = { "MerchantFrame", "BankFrame", "TradeFrame", "MailFrame", "SendMailFrame", "GuildBankFrame", "AuctionHouseFrame" }
 local BIND_POPUPS = { "EQUIP_BIND", "AUTOEQUIP_BIND", "EQUIP_BIND_TRADEABLE", "EQUIP_BIND_REFUNDABLE" }
 
 local function plural(n, one, many) return n .. " " .. (n == 1 and one or (many or one .. "s")) end
@@ -271,6 +278,8 @@ local function equip(plan)
 end
 
 ---Empties the old bag into the others, then puts the new one in. False and why if it can't start.
+---When the new bag sits in the bag it replaces, it moves out with the rest, and the old bag then lands in
+---the slot it moved to: never inside itself.
 function Swap:Run(plan)
   local pause = D.PauseReason()
   if pause then return false, pause == "in combat" and "You're in combat: try again after." or "A fight or match is under way: try again after." end
@@ -311,7 +320,7 @@ end
 -- Catching a bag dropped on a full one
 -------------------------------------------------------------------------------------------
 
-local attempt   -- { inv, ref, at } while a dropped bag's answer is awaited
+local attempt   -- { inv, ref, at, used } while a dropped or right-clicked bag's answer is awaited
 
 ---Where the bag on the cursor came from: the locked slot holding it.
 local function cursorBag()
@@ -333,17 +342,25 @@ local function slotByInv(inv)
   end
 end
 
----After a dropped bag: if the game refused because the old bag holds things, empty it and swap.
+---After a dropped bag: if the game refused because the old bag holds things, empty it and swap. After a
+---right-clicked one: if the game left it where it was, swap it in over the bag it would best replace.
 function Swap:Settle()
   local a = attempt
-  if not a or GetTime() - a.at > REFUSAL_WINDOW then return end
+  if not a or GetTime() - a.at > REFUSAL_WINDOW + (a.used and USE_WAIT or 0) then return end
   local target = slotByInv(a.inv)
   if not target or target.itemId == a.ref.id then attempt = nil return end   -- it went in
-  local holds = false
-  for slot = 1, D.Size(target.id) do
-    if D.Read(target.id, slot) then holds = true break end
+  if a.used then
+    -- the game had its say first: if the bag moved, or is still waiting on the server, leave it be
+    local info = D.Read(a.ref.bag, a.ref.slot)
+    if not info or info.itemID ~= a.ref.id then attempt = nil return end
+    if info.isLocked or D.CursorBusy() then return end
+  else
+    local holds = false
+    for slot = 1, D.Size(target.id) do
+      if D.Read(target.id, slot) then holds = true break end
+    end
+    if not holds then return end   -- not refused for being full; the game has its own reasons
   end
-  if not holds then return end   -- not refused for being full; the game has its own reasons
   attempt = nil
   if D.CursorBusy() then D.Global("ClearCursor") end   -- it goes back where it was
   local plan = Swap.Plan(a.ref, target)
@@ -364,6 +381,36 @@ end
 Swap.Dropped = dropped
 
 if rawget(_G, "PutItemInBag") then hooksecurefunc("PutItemInBag", dropped) end
+
+local function elsewhere()
+  for _, name in ipairs(ELSEWHERE) do
+    local f = rawget(_G, name)
+    if type(f) == "table" and f.IsShown and f:IsShown() then return true end
+  end
+  return false
+end
+
+---A right-click on a bag item. The game puts it in an empty bag slot itself; with none, it refuses, so this
+---swaps it in over the bag it would best replace. Not at a vendor, bank, mailbox or trade, where a
+---right-click means something else.
+local function used(bag, slot)
+  if equipping or not (D.db and D.db.bagSwap) or not bag or not slot or Core.IsSecret(bag) then return end
+  if Mover:Active() or elsewhere() then return end
+  local info = D.Read(bag, slot)
+  if not info or not Swap.IsBag(info.itemID) then return end
+  local slots = Swap.Slots()
+  for _, s in ipairs(slots) do
+    if s.size == 0 then return end   -- an empty bag slot: the game does it
+  end
+  local ref = bagRef(bag, slot, info)
+  local target = Swap.TargetFor(ref, slots)
+  if not target then return end
+  attempt = { inv = target.inv, ref = ref, at = GetTime(), used = true }
+  D.In("C_Timer", "After", USE_WAIT, function() Swap:Settle() end)
+end
+Swap.Used = used
+
+if rawget(_G, "C_Container") and C_Container.UseContainerItem then hooksecurefunc(C_Container, "UseContainerItem", used) end
 -- the game's refusal comes as an error; it may come after the cursor has already let go
 Core:On("UI_ERROR_MESSAGE", "dimension.swap", function()
   if attempt then Core:NextFrame(function() Swap:Settle() end, "dimension.swap") end

@@ -162,6 +162,12 @@ end
 local function fillRoom(f)
   local list = Room:List()
   local items = {}
+  if list.ordinaryFree == 0 and list.specialFree > 0 then
+    items[#items + 1] = { group = "Where your free slots are" }
+    items[#items + 1] = { title = string.format("%d free in your reagent or profession bags, none elsewhere", list.specialFree),
+      sub = list.away > 0 and "Only what they're made for fits there. Moving it over frees ordinary slots"
+        or "Only what they're made for fits there, and nothing you carry does. Clear an ordinary slot below" }
+  end
   if list.moves > 0 then
     items[#items + 1] = { group = "Costs nothing" }
     items[#items + 1] = { title = "Merge partial stacks and put things in their bags", sub = "Nothing leaves your bags",
@@ -192,7 +198,8 @@ local function fillRoom(f)
   if #list.toss > 0 then
     items[#items + 1] = { group = "Cheapest things no rule wants" }
     for _, e in ipairs(list.toss) do
-      items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""), sub = "Worth little. That's only an opinion", right = D.Money(e.value),
+      items[#items + 1] = { id = e.id, link = e.link, title = itemName(e.id, e.name) .. (e.count > 1 and (" × " .. e.count) or ""),
+        sub = e.special and "In a reagent or profession bag: frees a slot only some things fit" or "Worth little. That's only an opinion", right = D.Money(e.value),
         actions = { destroyAction(e), { text = "Mark Junk", width = 72, run = function() D.db.itemMarks[e.id] = "junk" D:Changed() end } } }
     end
   end
