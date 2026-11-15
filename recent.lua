@@ -1,5 +1,5 @@
--- New items: what came into your bags lately glows on its slot until you hover it, and sits in a New group at
--- the top of the bag window, so a fresh drop is found without hunting. It goes on time too (30 minutes by
+-- New items: what came into your bags lately glows on its slot until you hover it, so a fresh drop is found
+-- without hunting. Only a glow: it stays where it is in the bag window. It goes on time too (30 minutes by
 -- default), so a glow you never looked at doesn't stay for ever.
 --
 -- It works from counts, not slots: what you carry of each item, compared after every bag change. Items moving
@@ -7,8 +7,7 @@
 -- the point: five more Linen Cloth is something you just got. What comes out of the bank isn't new, and
 -- neither is anything at login: the counts are saved, so a reload or a slow first bag load changes nothing.
 --
--- Hovering clears only the glow. The window keeps its place until it lays out again, so nothing jumps under
--- the mouse; a click on the New header clears the lot.
+-- /dim seen clears the lot.
 
 local Core = NorgannonCore
 local D = Dimension
@@ -59,7 +58,6 @@ function Recent.Count()
   return n
 end
 
--- only the glows: the window waits for its next layout, so a slot never moves under the mouse
 local function redrawGlows()
   local O = D.Overlay
   if not O then return end
@@ -74,7 +72,7 @@ function Recent:Seen(id)
   redrawGlows()
 end
 
----Everything seen: the New header's click, and /dim seen.
+---Everything seen: /dim seen.
 function Recent:SeenAll()
   wipe(list())
   D:Changed()
