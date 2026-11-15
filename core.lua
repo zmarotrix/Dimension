@@ -35,6 +35,8 @@ D.DEFAULTS = {
   fillBar = true,      -- the bar under the items showing how full the bags are
   bagSwap = true,      -- empty a bag for you when you swap in a bigger one
   putAway = true,      -- full ordinary bags: move what fits into the reagent and profession bags
+  recent = true,       -- new items glow until hovered, and have a group at the top of the bag window
+  recentFor = 30,      -- minutes an item stays new if it's never hovered
   bagSizes = {},       -- [itemId] = slots, learnt from bags worn and tooltips
   buyCap = 10000,      -- copper a vendor visit may spend from the carry list (1g)
   mergeAt = 6,         -- merge stacks by itself at this many free slots or fewer
@@ -62,6 +64,7 @@ Core:NewAddon("dimension", {
     tidy = { function() D.Tidy:Run() end, "tidy your bags" },
     room = { function() D.Window:Open("room") end, "what would free space" },
     swap = { function() D.Swap:Best() end, "put in the biggest bag you carry, emptying the one it replaces" },
+    seen = { function() D.Recent:SeenAll() D:Print("Nothing counts as new now.") end, "clear the glow on new items" },
     probe = { function(rest) D.Probe:Run(rest ~= "" and string.lower(rest) or nil) end, "[sell | move | sort]: check what the client allows" },
   },
 })

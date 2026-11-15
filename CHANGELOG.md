@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.0, 2026-11-15
+
+- New items. What came into your bags lately has a gold edge on its slot, in the bag window and the game's
+  own bags, until you hover it, and sits in a New group at the top of the bag window. Bigger stacks count:
+  five more Linen Cloth is something you just got. Moving things between bags, sorting, the bank and logging
+  in never make anything new. An item you never hover stops being new after 30 minutes (Settings, Numbers).
+  Click the New header, or `/dim seen`, to clear them all. A setting turns it off.
+
 ## 0.16.0, 2026-11-13
 
 - Dropping a bag on the very bag it sits in now works: it moves out with the rest of that bag's items, goes in,

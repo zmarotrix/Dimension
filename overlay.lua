@@ -20,6 +20,8 @@ local SELL_SHADE = .6        -- how dark the icon of something that sells gets, 
 local STRIP_W, STRIP_H = 318, 38
 local LOW_FREE = 4           -- the strip's count turns to a warning at this many free slots
 local GREEN = { .56, .88, .56 }
+local NEW_GLOW = { 1, .86, .42 }   -- warm gold: no item quality uses it, so it never reads as a rarity border
+local NEW_EDGE = 2
 local WARN = { 1, .58, .47 }
 
 local marks = setmetatable({}, { __mode = "k" })   -- item button -> its marks
@@ -55,6 +57,21 @@ local function marksFor(button)
   m.keep:SetPoint("TOPLEFT", 1, -1)
   m.pin = UI.Icon(m, "chevron", MARK_SIZE, UI.Accent("dimension"), "OVERLAY")
   m.pin:SetPoint("TOPRIGHT", -1, -1)
+  -- new: a gold edge inside the slot and a faint wash, below the other marks and clear of the count
+  m.new = CreateFrame("Frame", nil, m)
+  m.new:SetAllPoints()
+  m.new:EnableMouse(false)
+  local wash = m.new:CreateTexture(nil, "ARTWORK")
+  wash:SetAllPoints()
+  wash:SetColorTexture(NEW_GLOW[1], NEW_GLOW[2], NEW_GLOW[3], .14)
+  for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+    local t = m.new:CreateTexture(nil, "ARTWORK", nil, 1)
+    t:SetColorTexture(NEW_GLOW[1], NEW_GLOW[2], NEW_GLOW[3], .9)
+    t:SetPoint(side[1])
+    t:SetPoint(side[2])
+    if side[3] then t:SetHeight(NEW_EDGE) else t:SetWidth(NEW_EDGE) end
+  end
+  m.new:Hide()
   marks[button] = m
   return m
 end
@@ -93,6 +110,7 @@ local function refreshButton(button)
   end
   m.keep:SetShown(show == "keep")
   m.pin:SetShown(pinned and true or false)
+  m.new:SetShown(info ~= nil and D.Recent ~= nil and D.Recent.Is(info.itemID))
 end
 
 Overlay.RefreshButton = refreshButton

@@ -39,12 +39,16 @@ Core:OnLogin(function()
     function() return D.db.marks end, function(on) D.db.marks = on D:Changed() end)
   list:Toggle("Empty a bag for you when you swap in a bigger one", "Drop a bag on one that still holds things and its items move to your other bags first. If they won't fit, you're told how many slots to free. Bigger bags you carry show in Make room and their tooltips.",
     function() return D.db.bagSwap end, function(on) D.db.bagSwap = on D:Changed() end)
+  list:Toggle("Highlight new items", "What came into your bags lately glows gold and sits in a New group at the top of the bag window, until you hover it. Click the New header, or /dim seen, to clear them all.",
+    function() return D.db.recent end, function(on) D.db.recent = on D:Changed() end)
   list:Toggle("Move reagents into the reagent bag when your bags fill", "When your ordinary bags are full, reagents and profession goods move into the bags made for them, so the next loot has a slot. Only between your own bags.",
     function() return D.db.putAway end, function(on) D.db.putAway = on D:Changed() end)
   list:Toggle("The verdict and reason in tooltips", nil,
     function() return D.db.tooltips end, function(on) D.db.tooltips = on end)
 
   list:Header("Numbers")
+  list:Slider("Minutes an item stays new", "If you never hover it.", 5, 120, 5,
+    function() return D.db.recentFor end, function(v) D.db.recentFor = v D:Changed() end, "%.0f", 1)
   list:Slider("Merge stacks at this many free slots", "With the merging rule on, this is how full bags get first.", 0, 20, 1,
     function() return D.db.mergeAt end, function(v) D.db.mergeAt = v end, "%.0f", 1)
   list:Slider("Spending cap per vendor visit", "For buying what's on the carry list, in gold.", 0, 50, 1,

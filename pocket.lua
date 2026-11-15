@@ -48,6 +48,8 @@ local KEYRING = -1          -- Enum.BagIndex.Keyring: the game's own frame keeps
 -- an item is in the first of these that claims it, wherever the groups have been moved to
 local function kind(item) return Core.Bags.Kind(item.id, 1) end
 local GROUPS = {
+  -- what you just got, ahead of any rule or choice of yours; it goes back to its own group once seen
+  { key = "new", label = "New", ours = true, row = 0, first = true, claims = function(item) return D.Recent and D.Recent.Is(item.id) end },
   { key = "sell", label = "To sell", ours = true, row = 0, claims = function(item) return item.verdict == "sell" end },
   { key = "quest", label = "Quests", ours = true, row = 0, claims = function(item) return item.facts.class == Rules.CLASS_QUEST or item.questItem or Rules.QuestWants(item.id) end },
   { key = "every", label = "Everyday", row = 0, claims = function(item) return Rules.IsEveryday(item.id) end },
@@ -104,9 +106,10 @@ function Pocket.Arrangement()
     end
   end
   for _, g in ipairs(GROUPS) do
-    if not seen[g.key] then out[#out + 1] = { key = g.key, row = g.row } end
+    if not seen[g.key] then out[#out + 1] = { key = g.key, row = g.row, first = g.first } end
   end
-  for i, entry in ipairs(out) do entry.order = i end
+  -- a group that belongs first (New) goes first in its row, even in a layout saved before it existed
+  for i, entry in ipairs(out) do entry.order = entry.first and 0 or i end
   table.sort(out, function(a, b)
     if a.row ~= b.row then return a.row < b.row end
     return a.order < b.order
@@ -153,7 +156,9 @@ function Pocket:Sections()
           count = info.stackCount or 1, facts = facts, bound = info.isBound, questItem = type(quest) == "table" and quest.isQuestItem,
           verdict = Rules:Verdict(info.itemID, info, entry.id, slot) }
         local chosen = D.db.assign[info.itemID]
-        if chosen and GROUP_BY_KEY[chosen] and not GROUP_BY_KEY[chosen].empty then
+        if GROUPS[1].claims(item) then
+          table.insert(filled.new, item)
+        elseif chosen and GROUP_BY_KEY[chosen] and not GROUP_BY_KEY[chosen].empty then
           table.insert(filled[chosen], item)
         else
           for _, g in ipairs(GROUPS) do
@@ -191,7 +196,7 @@ end
 function Pocket.GroupChoices(id)
   local items = {}
   for _, g in ipairs(GROUPS) do
-    if not g.empty then
+    if not g.empty and not g.first then   -- New fills itself
       local here = D.db.assign[id] == g.key
       items[#items + 1] = { text = labelOf(g) .. (here and " (chosen)" or ""), func = function() Pocket:PlaceItem(id, g.key) end }
     end
@@ -298,6 +303,8 @@ local function headerFor(i)
     if draggedAt == GetTime() then return end   -- letting go of a drag isn't a click
     if editing then
       Pocket:StartRename(self)
+    elseif self.key == "new" then
+      D.Recent:SeenAll()   -- seen them: back to their own groups
     elseif not self.empty then   -- Empty stays open: its count is the point of it
       D.db.collapsed[self.key] = not D.db.collapsed[self.key] or nil
       Pocket:Layout(true)
@@ -307,6 +314,14 @@ local function headerFor(i)
     if editing then Pocket:StartGroupDrag(self) end
   end)
   h:SetScript("OnDragStop", function() Pocket:StopDrag() end)
+  h:SetScript("OnEnter", function(self)
+    if self.key ~= "new" or editing then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:AddLine("New", 1, 1, 1)
+    GameTooltip:AddLine("What came into your bags lately. Each one leaves when you hover it and the window next lays out; click here to clear them all.", .8, .8, .8, true)
+    GameTooltip:Show()
+  end)
+  h:SetScript("OnLeave", function() GameTooltip:Hide() end)
   headers[i] = h
   return h
 end
