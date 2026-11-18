@@ -28,18 +28,27 @@ function Tips:AddItem(tt, id)
   if not D.db.tooltips then return 0 end
   local a = Core.UI.Accent("dimension")
   local added = 0
+  -- One line by default, the reason while Shift is held. "Kept" is the usual case and says nothing new
+  -- (the quest or the mark is already on the tooltip), so it waits for Shift altogether; a sale doesn't.
+  local Tip = Core.Tooltip
+  local detail = not Tip or Tip.Detail()
+  local function head(text, more)
+    if Tip then Tip.Head(tt, text, a, more) else tt:AddLine(text, a[1], a[2], a[3]) end
+    added = added + 1
+  end
   local verdict, why = Tips.About(id)
-  if verdict and WORDS[verdict] then
-    tt:AddLine("Dimension: " .. WORDS[verdict], a[1], a[2], a[3])
-    tt:AddLine(why, .8, .8, .8)
-    added = 2
+  if verdict and WORDS[verdict] and (verdict == "sell" or detail) then
+    head("Dimension: " .. WORDS[verdict], why ~= nil)
+    if detail and why then tt:AddLine(why, .8, .8, .8) added = added + 1 end
   end
   -- a bag that would give you more room
   local u = D.Swap and D.db.bagSwap and D.Swap.IsBag(id) and D.Swap.UpgradeFor(id)
   if u then
-    tt:AddLine(u.target.itemId and string.format("Dimension: %d more slots than your %s", u.gain, u.target.name) or "Dimension: fits your empty bag slot", a[1], a[2], a[3])
-    tt:AddLine(u.plan.short > 0 and D.Swap.ShortText(u.plan) or "/dim swap or Make room puts it in, and moves what's in the old bag.", .8, .8, .8, true)
-    added = added + 2
+    head(u.target.itemId and string.format("Dimension: %d more slots than your %s", u.gain, u.target.name) or "Dimension: fits your empty bag slot", true)
+    if detail then
+      tt:AddLine(u.plan.short > 0 and D.Swap.ShortText(u.plan) or "/dim swap or Make room puts it in, and moves what's in the old bag.", .8, .8, .8, true)
+      added = added + 1
+    end
   end
   return added
 end
