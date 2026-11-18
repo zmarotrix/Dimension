@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.0, 2026-11-17
+
+- Sells by Fortune. With Fortune installed, what it says is worth more at a vendor than at auction sells (trade goods
+  and the like, never gear, only once Fortune has auction prices for it), and what it says sells for more at auction
+  stays, even a grey. It never reaches the "never sold" list or your Keep marks. Rules, "What Fortune says is worth
+  more at a vendor" turns it off.
+
 ## 0.17.0, 2026-11-15
 
 - New items. What came into your bags lately has a gold edge on its slot, in the bag window and the game's

@@ -120,6 +120,21 @@ local function anotherCharacterUses(id)
   end
 end
 
+---What Fortune (the suite's gold add-on), if it's installed, says about an unbound item that isn't gear: "vendor"
+---(worth more at a vendor, and Fortune has auction prices to say so), "auction" (it clearly sells for more there) or
+---nil (no verdict). Gear you might wear stays your call, and soulbound items have no choice to make.
+function Rules.FortuneSays(id, info, quality)
+  local Fortune = rawget(_G, "Fortune")
+  local router = type(Fortune) == "table" and not Fortune.disabled and Fortune.Router
+  if not (router and router.Verdict) then return nil end
+  if info and info.isBound then return nil end
+  local facts = Rules.Facts(id)
+  if facts.class == CLASS_WEAPON or facts.class == CLASS_ARMOR then return nil end
+  local ok, verdict = pcall(router.Verdict, router, (info and info.hyperlink) or id, (info and info.stackCount) or 1, quality)
+  if ok and (verdict == "vendor" or verdict == "auction") then return verdict end
+  return nil
+end
+
 ---True if a profession here, or with the rule on another character's, uses this item.
 function Rules.ProfessionUses(id)
   if ourProfessionUses(id) then return true end
@@ -221,6 +236,11 @@ function Rules:Verdict(id, info, bag, slot)
     local alt = anotherCharacterUses(id)
     if alt then return "keep", alt .. "'s profession uses this" end
   end
+  -- Fortune knows what things sell for: what's worth more at auction stays (even a grey), what's worth more at a
+  -- vendor goes. Below the protections and your own marks, so it can't reach either.
+  local fortune = rules.fortune and Rules.FortuneSays(id, info, quality)
+  if fortune == "auction" then return "stay", "Worth more at auction (Fortune)" end
+  if fortune == "vendor" then return "sell", "Worth more at a vendor than at auction (Fortune)" end
   if quality == POOR and rules.grey then return "sell", "Grey" end
   if rules.cantUse and info and info.isBound and Rules.CantEverUse(facts) then return "sell", "Soulbound gear you can't use" end
   if rules.noRecipe and facts.class == CLASS_TRADE and quality and quality <= 1 then return "sell", "No recipe of yours uses this" end

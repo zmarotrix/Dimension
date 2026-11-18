@@ -21,7 +21,7 @@ local D = Dimension
 -- Automation is off until the first-run choice (suite plan, decision 5); the first two only say
 -- what can go, and `overCap` and `destroy` are the two things that take a clear opt-in
 local RULES = {
-  grey = true, marked = true, cantUse = false, noRecipe = false, altKeep = true,
+  grey = true, marked = true, cantUse = false, noRecipe = false, altKeep = true, fortune = true,
   autoSell = false, repair = false, merge = false, autoBank = false, tidyAfter = false, buy = false,
   overCap = false, destroy = false,
 }
