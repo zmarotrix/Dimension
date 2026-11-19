@@ -276,8 +276,58 @@ local function buy()
   end
 end
 
+-------------------------------------------------------------------------------------------
+-- Favourites never sell, by hand either. The game's own right-click, drag and Sell Junk can't be stopped
+-- without taking over its bag buttons, so a favourite that lands on the buyback list is bought straight
+-- back: same price both ways, so it costs nothing. Only a sale made while you stand here, of an item
+-- that's a favourite at the time: what was on the list when you came, or when you starred it, stays.
+-------------------------------------------------------------------------------------------
+
+local onList = {}   -- [itemId] = how many of it were on the buyback list, last look
+
+local function buybackCounts()
+  local out = {}
+  for i = 1, D.Global("GetNumBuybackItems") or 0 do
+    local id = D.In("C_MerchantFrame", "GetBuybackItemID", i)
+    if id then out[id] = (out[id] or 0) + 1 end
+  end
+  return out
+end
+
+---Buys back any favourite just sold here. How many it bought back.
+function Vendor:GuardFavourites()
+  if not (open and D.db) then return 0 end
+  local now, saved = buybackCounts(), 0
+  for id, n in pairs(now) do
+    local extra = n - (onList[id] or 0)
+    if extra > 0 and D.IsFavorite(id) and merchantShown() then
+      for i = D.Global("GetNumBuybackItems") or 0, 1, -1 do   -- newest first: the one just sold
+        if extra == 0 then break end
+        if D.In("C_MerchantFrame", "GetBuybackItemID", i) == id then
+          D.Global("BuybackItem", i)
+          extra, saved = extra - 1, saved + 1
+          local name = Rules.Facts(id).name or "A favourite"
+          D:Print(name .. " is a favourite, so I bought it back. Alt-click it to take the star off if you mean to sell it.")
+          D:Log("Bought back " .. name, "A favourite: never sold", id)
+        end
+      end
+    end
+  end
+  onList = buybackCounts()
+  return saved
+end
+
+---Starring an item that's already on the buyback list leaves it there: only later sales are undone.
+function Vendor:NoteBuyback()
+  if open then onList = buybackCounts() end
+end
+
+Core:On("MERCHANT_UPDATE", "dimension.vendor.fav", function() Vendor:GuardFavourites() end)
+Core:On("BAG_UPDATE_DELAYED", "dimension.vendor.fav", function() Vendor:GuardFavourites() end)
+
 Core:On("MERCHANT_SHOW", "dimension.vendor", function()
   open = true
+  onList = buybackCounts()
   visit = { sold = {}, value = 0, spent = 0, bought = 0 }
   -- what's restricted here, and whether a click's sales then go through, is only known from the real game
   if D.db then D.db.probe.restrictionsAtVendor = D.ActiveRestrictions() end

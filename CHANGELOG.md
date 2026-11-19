@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.0, 2026-11-19
+
+- Favourites can't be sold by hand either. Right-click one at a vendor, drag it onto the vendor or let the
+  game's Sell Junk take it, and it's bought straight back at the price it fetched, with a line in chat saying
+  why. Take the star off first if you mean to sell it. Dimension's own selling already left favourites alone.
+
 ## 0.20.0, 2026-11-19
 
 - Favourites stand out more: a bigger star, outlined, with a gold halo behind it.

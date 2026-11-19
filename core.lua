@@ -206,6 +206,7 @@ function D:ToggleFavorite(id)
   self.db.favorites = self.db.favorites or {}
   local on = not self.db.favorites[id]
   self.db.favorites[id] = on or nil
+  if self.Vendor then self.Vendor:NoteBuyback() end
   self:Changed()
   return on
 end
