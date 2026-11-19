@@ -2,9 +2,9 @@
 
 ## 0.19.0, 2026-11-18
 
-- Favourites. Ctrl-click an item in your bags (the bag window or the game's own) and it gets a gold star on its
-  slot; the same click takes it away. A favourite is never sold, like a Keep mark. Ctrl-click also tries gear on
-  in the dressing room, so a setting makes it Alt-click instead.
+- Favourites. Alt-click an item in your bags (the bag window or the game's own) and it gets a gold star on its
+  slot; the same click takes it away. A favourite is never sold, like a Keep mark. Ctrl-click stays the game's
+  own, trying gear on.
 - A Favourites group in the bag window puts your starred items together at the start of the top row. It's off
   by default: turn it on in Settings.
 

@@ -130,18 +130,15 @@ end
 Overlay.RefreshButton = refreshButton
 
 -------------------------------------------------------------------------------------------
--- Favourites: a modified click stars an item
+-- Favourites: Alt-click stars an item. Not Ctrl-click: the game tries gear on with that
 -------------------------------------------------------------------------------------------
 
 local clickHooked = setmetatable({}, { __mode = "k" })
 
----True when the click was the favourite click: Ctrl, or Alt if chosen, and nothing else held.
+---True when the click was the favourite click: Alt, and nothing else held.
 function Overlay.IsFavoriteClick(mouseButton)
   if not (D.db and D.db.favClick) or mouseButton ~= "LeftButton" then return false end
-  local ctrl, alt, shift = IsControlKeyDown(), IsAltKeyDown(), IsShiftKeyDown()
-  if shift then return false end
-  if D.db.favAlt then return alt and not ctrl end
-  return ctrl and not alt
+  return IsAltKeyDown() and not IsControlKeyDown() and not IsShiftKeyDown()
 end
 
 -- after the game's own click, which stays as it was: a post-hook, so nothing of ours runs inside it

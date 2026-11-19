@@ -43,8 +43,7 @@ D.DEFAULTS = {
   sellMethod = "cursor",
   itemMarks = {},      -- [itemId] = "junk" | "keep"
   favorites = {},      -- [itemId] = true: starred, kept, and grouped if favGroup is on
-  favClick = true,     -- a modified click on a bag slot stars the item
-  favAlt = false,      -- that click is Alt-click instead of Ctrl-click (Ctrl-click also tries gear on)
+  favClick = true,     -- Alt-click on a bag slot stars the item (Ctrl-click stays the game's try-on)
   favGroup = false,    -- a Favourites group in the bag window
   collapsed = {},      -- [group key] = true
   assign = {},         -- [itemId] = group key, chosen in Edit layout
