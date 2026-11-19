@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.0, 2026-11-18
+
+- Favourites. Ctrl-click an item in your bags (the bag window or the game's own) and it gets a gold star on its
+  slot; the same click takes it away. A favourite is never sold, like a Keep mark. Ctrl-click also tries gear on
+  in the dressing room, so a setting makes it Alt-click instead.
+- A Favourites group in the bag window puts your starred items together at the start of the top row. It's off
+  by default: turn it on in Settings.
+
 ## 0.18.0, 2026-11-17
 
 - Sells by Fortune. With Fortune installed, what it says is worth more at a vendor than at auction sells (trade goods

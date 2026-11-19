@@ -42,6 +42,10 @@ D.DEFAULTS = {
   mergeAt = 6,         -- merge stacks by itself at this many free slots or fewer
   sellMethod = "cursor",
   itemMarks = {},      -- [itemId] = "junk" | "keep"
+  favorites = {},      -- [itemId] = true: starred, kept, and grouped if favGroup is on
+  favClick = true,     -- a modified click on a bag slot stars the item
+  favAlt = false,      -- that click is Alt-click instead of Ctrl-click (Ctrl-click also tries gear on)
+  favGroup = false,    -- a Favourites group in the bag window
   collapsed = {},      -- [group key] = true
   assign = {},         -- [itemId] = group key, chosen in Edit layout
   names = {},          -- [group key] = the player's name for it
@@ -191,6 +195,20 @@ function D:Me()
   me.pins = me.pins or {}               -- ["bag:slot"] = itemId
   me.history = me.history or {}         -- newest first: { at, what, detail, id, count, value }
   return me
+end
+
+---True for an item you starred.
+function D.IsFavorite(id)
+  return id ~= nil and D.db ~= nil and D.db.favorites ~= nil and D.db.favorites[id] == true
+end
+
+---Stars an item, or takes its star away. True if it's a favourite now.
+function D:ToggleFavorite(id)
+  self.db.favorites = self.db.favorites or {}
+  local on = not self.db.favorites[id]
+  self.db.favorites[id] = on or nil
+  self:Changed()
+  return on
 end
 
 ---Adds to History. Everything Dimension does goes through here, so nothing happens unexplained.

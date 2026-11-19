@@ -181,6 +181,7 @@ local function hardKeep(id, facts, info, bag, slot, me)
   if id == HEARTHSTONE then return "Your hearthstone" end
   if bag and me.pins[bag .. ":" .. slot] == id then return "Pinned to this slot" end
   if D.db.itemMarks[id] == "keep" then return "You marked this Keep" end
+  if D.db.favorites and D.db.favorites[id] then return "One of your favourites" end
   if TOOLS[id] then return "A profession tool" end
   local listed = Rules.OnALists(id, me, Core.Bags.Kind(id, facts.quality))
   if listed then return listed end

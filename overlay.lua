@@ -22,6 +22,8 @@ local LOW_FREE = 4           -- the strip's count turns to a warning at this man
 local GREEN = { .56, .88, .56 }
 local NEW_GLOW = { 1, .86, .42 }   -- warm gold: no item quality uses it, so it never reads as a rarity border
 local NEW_EDGE = 2
+local STAR_SIZE = 13
+local STAR = { 1, .82, .2 }
 local WARN = { 1, .58, .47 }
 
 local marks = setmetatable({}, { __mode = "k" })   -- item button -> its marks
@@ -57,6 +59,12 @@ local function marksFor(button)
   m.keep:SetPoint("TOPLEFT", 1, -1)
   m.pin = UI.Icon(m, "chevron", MARK_SIZE, UI.Accent("dimension"), "OVERLAY")
   m.pin:SetPoint("TOPRIGHT", -1, -1)
+  -- a favourite: a gold star in the top right, on a dark one so it reads on any icon; a pin moves beside it
+  m.starShadow = UI.Icon(m, "star", STAR_SIZE + 3, { 0, 0, 0, .85 }, "OVERLAY")
+  m.starShadow:SetPoint("CENTER", m, "TOPRIGHT", -STAR_SIZE / 2 - 1, -STAR_SIZE / 2 - 1)
+  m.star = UI.Icon(m, "star", STAR_SIZE, STAR, "OVERLAY")
+  m.star:SetDrawLayer("OVERLAY", 1)
+  m.star:SetPoint("CENTER", m.starShadow)
   -- new: a gold edge inside the slot and a faint wash, below the other marks and clear of the count
   m.new = CreateFrame("Frame", nil, m)
   m.new:SetAllPoints()
@@ -110,10 +118,49 @@ local function refreshButton(button)
   end
   m.keep:SetShown(show == "keep")
   m.pin:SetShown(pinned and true or false)
+  local fav = info ~= nil and D.IsFavorite(info.itemID)
+  m.star:SetShown(fav)
+  m.starShadow:SetShown(fav)
+  m.pin:ClearAllPoints()
+  m.pin:SetPoint("TOPRIGHT", fav and -(STAR_SIZE + 2) or -1, -1)
+  Overlay.HookClick(button)
   m.new:SetShown(info ~= nil and D.Recent ~= nil and D.Recent.Is(info.itemID))
 end
 
 Overlay.RefreshButton = refreshButton
+
+-------------------------------------------------------------------------------------------
+-- Favourites: a modified click stars an item
+-------------------------------------------------------------------------------------------
+
+local clickHooked = setmetatable({}, { __mode = "k" })
+
+---True when the click was the favourite click: Ctrl, or Alt if chosen, and nothing else held.
+function Overlay.IsFavoriteClick(mouseButton)
+  if not (D.db and D.db.favClick) or mouseButton ~= "LeftButton" then return false end
+  local ctrl, alt, shift = IsControlKeyDown(), IsAltKeyDown(), IsShiftKeyDown()
+  if shift then return false end
+  if D.db.favAlt then return alt and not ctrl end
+  return ctrl and not alt
+end
+
+-- after the game's own click, which stays as it was: a post-hook, so nothing of ours runs inside it
+local function clicked(button, mouseButton)
+  if not Overlay.IsFavoriteClick(mouseButton) or D.CursorBusy() then return end
+  local okBag, bag = pcall(button.GetBagID, button)
+  local okSlot, slot = pcall(button.GetID, button)
+  if not (okBag and okSlot and bag and slot) or Core.IsSecret(bag) then return end
+  local info = D.Read(bag, slot)
+  if info then D:ToggleFavorite(info.itemID) end
+end
+Overlay.Clicked = clicked
+
+---Follows a slot's clicks, once per button: the game's bags, ours, and any that sends NORGANNON_BAG_BUTTON_UPDATED.
+function Overlay.HookClick(button)
+  if clickHooked[button] or not button.HookScript then return end
+  clickHooked[button] = true
+  button:HookScript("OnClick", clicked)
+end
 
 local function refreshFrame(frame)
   if not (frame.EnumerateValidItems and frame:IsShown()) then return end

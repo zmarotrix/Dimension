@@ -48,6 +48,8 @@ local KEYRING = -1          -- Enum.BagIndex.Keyring: the game's own frame keeps
 -- an item is in the first of these that claims it, wherever the groups have been moved to
 local function kind(item) return Core.Bags.Kind(item.id, 1) end
 local GROUPS = {
+  -- only with the setting on: favourites together, ahead of every rule and your own choice of group
+  { key = "fav", label = "Favourites", ours = true, row = 0, setting = "favGroup", claims = function(item) return D.IsFavorite(item.id) end },
   { key = "sell", label = "To sell", ours = true, row = 0, claims = function(item) return item.verdict == "sell" end },
   { key = "quest", label = "Quests", ours = true, row = 0, claims = function(item) return item.facts.class == Rules.CLASS_QUEST or item.questItem or Rules.QuestWants(item.id) end },
   { key = "every", label = "Everyday", row = 0, claims = function(item) return Rules.IsEveryday(item.id) end },
@@ -95,16 +97,19 @@ end
 
 ---Where the groups sit: { { key, row } }, top to bottom and left to right. A saved layout keeps its order;
 ---a group added in a later version turns up where it would by default.
+---A group that's switched off in the settings: it isn't drawn, placed or offered.
+local function off(g) return g.setting ~= nil and not D.db[g.setting] end
+
 function Pocket.Arrangement()
   local out, seen = {}, {}
   for _, entry in ipairs(D.db.layout or {}) do
-    if GROUP_BY_KEY[entry.key] and not seen[entry.key] then
+    if GROUP_BY_KEY[entry.key] and not seen[entry.key] and not off(GROUP_BY_KEY[entry.key]) then
       seen[entry.key] = true
       out[#out + 1] = { key = entry.key, row = entry.row }
     end
   end
   for _, g in ipairs(GROUPS) do
-    if not seen[g.key] then out[#out + 1] = { key = g.key, row = g.row } end
+    if not seen[g.key] and not off(g) then out[#out + 1] = { key = g.key, row = g.row } end
   end
   for i, entry in ipairs(out) do entry.order = i end
   table.sort(out, function(a, b)
@@ -153,11 +158,13 @@ function Pocket:Sections()
           count = info.stackCount or 1, facts = facts, bound = info.isBound, questItem = type(quest) == "table" and quest.isQuestItem,
           verdict = Rules:Verdict(info.itemID, info, entry.id, slot) }
         local chosen = D.db.assign[info.itemID]
-        if chosen and GROUP_BY_KEY[chosen] and not GROUP_BY_KEY[chosen].empty then
+        if not off(GROUPS[1]) and GROUPS[1].claims(item) then
+          table.insert(filled.fav, item)
+        elseif chosen and GROUP_BY_KEY[chosen] and not GROUP_BY_KEY[chosen].empty and not off(GROUP_BY_KEY[chosen]) then
           table.insert(filled[chosen], item)
         else
           for _, g in ipairs(GROUPS) do
-            if g.claims(item) then
+            if not off(g) and g.claims(item) then
               table.insert(filled[g.key], item)
               break
             end
@@ -191,7 +198,7 @@ end
 function Pocket.GroupChoices(id)
   local items = {}
   for _, g in ipairs(GROUPS) do
-    if not g.empty then
+    if not g.empty and not g.setting then   -- Favourites fills itself, from your stars
       local here = D.db.assign[id] == g.key
       items[#items + 1] = { text = labelOf(g) .. (here and " (chosen)" or ""), func = function() Pocket:PlaceItem(id, g.key) end }
     end
