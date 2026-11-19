@@ -43,7 +43,7 @@ Core:OnLogin(function()
     function() return D.db.favClick end, function(on) D.db.favClick = on D:Changed() end)
   list:Toggle("A Favourites group in the bag window", "Your starred items together, at the start of the top row. Off, they stay in their usual groups.",
     function() return D.db.favGroup end, function(on) D.db.favGroup = on D:Changed() end)
-  list:Toggle("Highlight new items", "What came into your bags lately glows gold until you hover it. /dim seen clears them all.",
+  list:Toggle("Highlight new items", "What came into your bags lately glows softly until you hover it. /dim seen clears them all.",
     function() return D.db.recent end, function(on) D.db.recent = on D:Changed() end)
   list:Toggle("Move reagents into the reagent bag when your bags fill", "When your ordinary bags are full, reagents and profession goods move into the bags made for them, so the next loot has a slot. Only between your own bags.",
     function() return D.db.putAway end, function(on) D.db.putAway = on D:Changed() end)

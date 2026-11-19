@@ -20,10 +20,12 @@ local SELL_SHADE = .6        -- how dark the icon of something that sells gets, 
 local STRIP_W, STRIP_H = 318, 38
 local LOW_FREE = 4           -- the strip's count turns to a warning at this many free slots
 local GREEN = { .56, .88, .56 }
-local NEW_GLOW = { 1, .86, .42 }   -- warm gold: no item quality uses it, so it never reads as a rarity border
-local NEW_EDGE = 2
-local STAR_SIZE = 13
+-- Neither mark touches the slot's edge: that's where the game shows an item's quality, and it stays readable.
+local NEW_GLOW = { .8, .93, 1 }    -- pale light, not gold: gold is a favourite's
+local NEW_LOW, NEW_HIGH, NEW_PULSE = .25, .85, .9   -- the light breathes between these, this many seconds each way
+local STAR_SIZE = 17
 local STAR = { 1, .82, .2 }
+local HALO_SIZE = 30
 local WARN = { 1, .58, .47 }
 
 local marks = setmetatable({}, { __mode = "k" })   -- item button -> its marks
@@ -59,25 +61,41 @@ local function marksFor(button)
   m.keep:SetPoint("TOPLEFT", 1, -1)
   m.pin = UI.Icon(m, "chevron", MARK_SIZE, UI.Accent("dimension"), "OVERLAY")
   m.pin:SetPoint("TOPRIGHT", -1, -1)
-  -- a favourite: a gold star in the top right, on a dark one so it reads on any icon; a pin moves beside it
-  m.starShadow = UI.Icon(m, "star", STAR_SIZE + 3, { 0, 0, 0, .85 }, "OVERLAY")
-  m.starShadow:SetPoint("CENTER", m, "TOPRIGHT", -STAR_SIZE / 2 - 1, -STAR_SIZE / 2 - 1)
+  -- a favourite: a big gold star in the top right on a dark outline, lit from behind by a gold halo, so it
+  -- reads on any icon at a glance. A pin moves beside it.
+  m.halo = m:CreateTexture(nil, "ARTWORK")
+  m.halo:SetTexture(UI.TEX.glow)
+  m.halo:SetBlendMode("ADD")
+  m.halo:SetVertexColor(STAR[1], STAR[2], STAR[3], .75)
+  m.halo:SetSize(HALO_SIZE, HALO_SIZE)
+  m.starShadow = UI.Icon(m, "star", STAR_SIZE + 4, { 0, 0, 0, .9 }, "OVERLAY")
+  m.starShadow:SetPoint("CENTER", m, "TOPRIGHT", -STAR_SIZE / 2, -STAR_SIZE / 2)
   m.star = UI.Icon(m, "star", STAR_SIZE, STAR, "OVERLAY")
   m.star:SetDrawLayer("OVERLAY", 1)
   m.star:SetPoint("CENTER", m.starShadow)
-  -- new: a gold edge inside the slot and a faint wash, below the other marks and clear of the count
+  m.halo:SetPoint("CENTER", m.starShadow)
+  -- new: a soft light in the middle of the icon that slowly breathes. It fades out before the edge, so the
+  -- quality border shows as it is; added light, so the icon underneath stays clear.
   m.new = CreateFrame("Frame", nil, m)
   m.new:SetAllPoints()
   m.new:EnableMouse(false)
-  local wash = m.new:CreateTexture(nil, "ARTWORK")
-  wash:SetAllPoints()
-  wash:SetColorTexture(NEW_GLOW[1], NEW_GLOW[2], NEW_GLOW[3], .14)
-  for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
-    local t = m.new:CreateTexture(nil, "ARTWORK", nil, 1)
-    t:SetColorTexture(NEW_GLOW[1], NEW_GLOW[2], NEW_GLOW[3], .9)
-    t:SetPoint(side[1])
-    t:SetPoint(side[2])
-    if side[3] then t:SetHeight(NEW_EDGE) else t:SetWidth(NEW_EDGE) end
+  local light = m.new:CreateTexture(nil, "ARTWORK")
+  light:SetTexture(UI.TEX.glow)
+  light:SetBlendMode("ADD")
+  light:SetVertexColor(NEW_GLOW[1], NEW_GLOW[2], NEW_GLOW[3])
+  light:SetPoint("TOPLEFT", 3, -3)
+  light:SetPoint("BOTTOMRIGHT", -3, 3)
+  m.newLight = light
+  m.new:SetAlpha(NEW_HIGH)
+  local pulse = m.new.CreateAnimationGroup and m.new:CreateAnimationGroup()
+  if pulse then
+    pulse:SetLooping("BOUNCE")
+    local a = pulse:CreateAnimation("Alpha")
+    a:SetFromAlpha(NEW_HIGH)
+    a:SetToAlpha(NEW_LOW)
+    a:SetDuration(NEW_PULSE)
+    a:SetSmoothing("IN_OUT")
+    m.newPulse = pulse
   end
   m.new:Hide()
   marks[button] = m
@@ -121,10 +139,16 @@ local function refreshButton(button)
   local fav = info ~= nil and D.IsFavorite(info.itemID)
   m.star:SetShown(fav)
   m.starShadow:SetShown(fav)
+  m.halo:SetShown(fav)
   m.pin:ClearAllPoints()
   m.pin:SetPoint("TOPRIGHT", fav and -(STAR_SIZE + 2) or -1, -1)
   Overlay.HookClick(button)
-  m.new:SetShown(info ~= nil and D.Recent ~= nil and D.Recent.Is(info.itemID))
+  local new = info ~= nil and D.Recent ~= nil and D.Recent.Is(info.itemID)
+  m.new:SetShown(new)
+  if m.newPulse then
+    if new and not m.newPulse:IsPlaying() then m.newPulse:Play()
+    elseif not new and m.newPulse:IsPlaying() then m.newPulse:Stop() end
+  end
 end
 
 Overlay.RefreshButton = refreshButton

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.0, 2026-11-19
+
+- Favourites stand out more: a bigger star, outlined, with a gold halo behind it.
+- New items no longer have a gold edge, which hid the quality colour. They glow softly in the middle of the
+  icon instead, breathing slowly, and the quality border shows as it is. The glow is pale, not gold, so it's
+  never mistaken for a favourite.
+
 ## 0.19.0, 2026-11-18
 
 - Favourites. Alt-click an item in your bags (the bag window or the game's own) and it gets a gold star on its
