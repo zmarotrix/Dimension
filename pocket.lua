@@ -38,6 +38,7 @@ local BODY_MARGIN = 4
 local RENAME_W, RENAME_LETTERS = 110, 24
 local ZONE_ALPHA = .12      -- how strongly a group's area shows in Edit layout
 local ZONE_HOT = .35        -- and the one a drag would land in
+local ZONE_RADIUS = 6
 local NEW_ROW_H = 20        -- the strip under the groups in Edit layout: drop a group there for a row of its own
 local FILL_BAR_H, FILL_H = 7, 14   -- the bar showing how full the bags are, and its row, which fits the count beside it
 local FILL_YELLOW, FILL_RED = .6, .95   -- how full it is at each colour: half-full bags are nothing to worry about
@@ -348,7 +349,9 @@ end
 local function zoneFor(i)
   local z = zones[i]
   if z then return z end
-  z = UI.Tex(win.scroll.content, "BACKGROUND", 0, C.frameGold)
+  z = CreateFrame("Frame", nil, win.scroll.content)
+  z:SetFrameLevel(win.scroll.content:GetFrameLevel() or 1)   -- behind the titles and the items
+  UI.Round(z, "BACKGROUND", 0, ZONE_RADIUS):SetColor(UI.Accent("dimension"))
   z:SetAlpha(ZONE_ALPHA)
   zones[i] = z
   return z
@@ -469,9 +472,9 @@ local function paintDropTarget(x, y)
     end
   end
   for _, z in ipairs(zones) do z:SetAlpha(z.group == hot and ZONE_HOT or ZONE_ALPHA) end
-  if newRowStrip then newRowStrip.fill:SetAlpha(strip and ZONE_HOT or ZONE_ALPHA) end
+  if newRowStrip then newRowStrip.fill:SetColor(UI.Accent("dimension"), strip and ZONE_HOT or ZONE_ALPHA) end
   if not dropMark then
-    dropMark = UI.Tex(win.scroll.content, "ARTWORK", 0, C.gold)
+    dropMark = UI.Tex(win.scroll.content, "ARTWORK", 0, UI.Accent("dimension"))
     dropMark:SetWidth(2)
     dropMark:Hide()
   end
@@ -491,8 +494,9 @@ local function ghostFrame()
   ghost:EnableMouse(false)
   ghost.icon = ghost:CreateTexture(nil, "ARTWORK")
   ghost.icon:SetAllPoints()
-  ghost.box = UI.Box(ghost, "BACKGROUND", 0)
-  ghost.box:Set(C.frameGold, C.stone)
+  -- a title being dragged is a raised key, lifted off the window
+  ghost.box = UI.Face(ghost, "BACKGROUND", 0)
+  ghost.box:Set(UI.Mix({ .165, .14, .115 }, UI.Accent("dimension"), .3))
   ghost.label = UI.Text(ghost, "title", 11, C.text)
   ghost.label:SetPoint("CENTER")
   ghost:SetScript("OnUpdate", function(self)
@@ -518,11 +522,10 @@ local function startDrag(what, picture, label)
   drag = what
   g.icon:SetShown(picture ~= nil)
   g.icon:SetTexture(picture)
-  g.box.border:SetShown(label ~= nil)
-  g.box.fill:SetShown(label ~= nil)
+  g.box:SetShown(label ~= nil)
   g.label:SetText(label or "")
   if label then
-    g:SetSize((g.label:GetStringWidth() or 0) + 12, HEADER_H + 2)
+    g:SetSize((g.label:GetStringWidth() or 0) + 16, HEADER_H + 2)
   else
     g:SetSize(TILE, TILE)
   end
@@ -593,9 +596,8 @@ function Pocket:StartRename(header)
     renamer:SetMaxLetters(RENAME_LETTERS)
     renamer:SetFontObject(UI.Font("title", 11))
     renamer:SetTextColor(C.text[1], C.text[2], C.text[3])
-    renamer:SetTextInsets(3, 3, 0, 0)
-    local box = UI.Box(renamer, "BACKGROUND", 0)
-    box:Set(C.frameGold, C.black)
+    renamer:SetTextInsets(5, 5, 0, 0)
+    UI.Field(renamer, "BACKGROUND", 0):Set(UI.Accent("dimension"), true)   -- lit: it's only there while you type
     renamer:SetScript("OnEnterPressed", function() Pocket:EndRename(true) end)
     renamer:SetScript("OnEscapePressed", function() Pocket:EndRename(false) end)
     renamer:SetScript("OnEditFocusLost", function() Pocket:EndRename(true) end)
@@ -799,16 +801,18 @@ function Pocket:Layout(now)
     local groupHeight = HEADER_H + lines * step
     lineHeight = math.max(lineHeight, groupHeight)
     groupRects[#groupRects + 1] = { key = s.key, x = x, y = y, w = pixels, h = groupHeight }
-    local zone = zoneFor(usedHeaders)
-    zone.group = s.key
-    zone:ClearAllPoints()
-    zone:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
-    zone:SetSize(pixels, groupHeight)
-    zone:SetShown(editing)
+    if editing then
+      local zone = zoneFor(usedHeaders)
+      zone.group = s.key
+      zone:ClearAllPoints()
+      zone:SetPoint("TOPLEFT", win.scroll.content, "TOPLEFT", x, y)
+      zone:SetSize(pixels, groupHeight)
+      zone:Show()
+    end
     x = x + pixels + GROUP_GAP
   end
   for i = usedHeaders + 1, #headers do headers[i]:Hide() end
-  for i = usedHeaders + 1, #zones do zones[i]:Hide() end
+  for i = (editing and usedHeaders or 0) + 1, #zones do zones[i]:Hide() end
   for _, slots in pairs(buttons) do
     for _, b in pairs(slots) do
       if not wanted[b] then b:Hide() end
@@ -822,9 +826,8 @@ function Pocket:Layout(now)
     if not newRowStrip then
       newRowStrip = CreateFrame("Frame", nil, win.scroll.content)
       newRowStrip:EnableMouse(false)
-      newRowStrip.fill = UI.Tex(newRowStrip, "BACKGROUND", 0, C.frameGold)
-      newRowStrip.fill:SetAllPoints()
-      newRowStrip.fill:SetAlpha(ZONE_ALPHA)
+      newRowStrip.fill = UI.Round(newRowStrip, "BACKGROUND", 0, ZONE_RADIUS)
+      newRowStrip.fill:SetColor(UI.Accent("dimension"), ZONE_ALPHA)
       newRowStrip.text = UI.Text(newRowStrip, "body", 11, C.muted)
       newRowStrip.text:SetPoint("CENTER")
       newRowStrip.text:SetText("Drop a title here for a new row")

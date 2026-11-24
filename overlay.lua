@@ -197,11 +197,12 @@ local function buildStrip()
   strip:SetSize(STRIP_W, STRIP_H)
   strip:SetFrameStrata("HIGH")
   strip:Hide()
-  local edge = UI.Tex(strip, "BACKGROUND", 0, UI.Accent("dimension"))
-  edge:SetAllPoints()
-  local back = UI.Tex(strip, "BACKGROUND", 1, C.stone)
-  back:SetPoint("TOPLEFT", 1, -1)
-  back:SetPoint("BOTTOMRIGHT", -1, 1)
+  -- the suite's small panel (as the Norgannon button's list); UI.Shadow's corners are too big for a strip this low
+  local accent = UI.Accent("dimension")
+  UI.Slice(strip, "BACKGROUND", -8, UI.TEX.shadow, 31 / 128, 31, 28)
+  UI.Round(strip, "BACKGROUND", -4, 10):SetColor(UI.Mix(C.stone, accent, .05))
+  UI.Wash(strip, "BACKGROUND", -3, 10, STRIP_H - 14):SetColor(accent, .155)   -- three quarters of a window's
+  UI.Sheen(strip, "BACKGROUND", -2)
   local mark = UI.Mark(strip, "dimension", 24)
   mark:SetPoint("LEFT", 6, 0)
   strip.count = UI.Text(strip, "bold", 13)
@@ -217,6 +218,8 @@ local function buildStrip()
   strip.tidy = UI.Button(strip, "Tidy", "quiet", function() D.Tidy:Run() end)
   strip.tidy:SetSize(44, 22)
   strip.tidy:SetPoint("RIGHT", strip.room, "LEFT", -4, 0)
+  -- outside a suite window, buttons are the suite's gold unless told otherwise
+  for _, b in ipairs({ strip.settings, strip.room, strip.tidy }) do b:ApplyAccent(accent) end
   Overlay.strip = strip
 end
 

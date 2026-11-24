@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.22.1, 2026-11-23
+
+- **Edit layout matches the suite's new windows.** Drop areas and the landing line are in Dimension's rose with round
+  corners, the title you drag is a raised key, and renaming a group happens in a lit text field. They were gold.
+- The strip beside the game's bags is a rounded panel with a soft shadow, and its buttons are in Dimension's colour.
+
+## 0.22.0, 2026-11-23
+
+- **Carry list, stash list, pins and History are back.** On 20 November 2026 the game stopped naming the realm, and
+  Dimension, which kept a character's lists under its realm and name, began again with empty ones. Both copies are put
+  together the first time this version loads; where they differ, the newer one counts. Characters are kept by their game
+  id from now on.
+- Needs Norgannon Core 1.34.
+
 ## 0.21.0, 2026-11-19
 
 - Favourites can't be sold by hand either. Right-click one at a vendor, drag it onto the vendor or let the

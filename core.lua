@@ -7,7 +7,7 @@ local Core = NorgannonCore
 
 if not (Core and Core.NewAddon) then
   Dimension = { disabled = true }
-  print("Dimension needs Norgannon Core 1.20 or newer; it is turned off.")
+  print("Dimension needs Norgannon Core 1.34 or newer; it is turned off.")
   return
 end
 
@@ -48,16 +48,75 @@ D.DEFAULTS = {
   collapsed = {},      -- [group key] = true
   assign = {},         -- [itemId] = group key, chosen in Edit layout
   names = {},          -- [group key] = the player's name for it
-  chars = {},          -- ["Realm-Name"] = a character's lists, pins and history
+  chars = {},          -- [GUID] = a character's lists, pins and history
   probe = {},
 }
 D.DEFAULTS.rules = RULES
 
+-------------------------------------------------------------------------------------------
+-- A character's record. Until 0.22.0 it was kept under "Realm-Name". The game stopped naming the realm on 2026-11-20, so
+-- the same character started again as "-Name". Now it's the GUID (Core.Character): the two copies are put together when
+-- the saved data loads, and a character moves to its GUID when it next logs in.
+-------------------------------------------------------------------------------------------
+
+local function lastAt(me)
+  local h = me.history and me.history[1]
+  return h and h.at or 0
+end
+
+---One record from two copies of it. `new` is the later one, unless the histories say otherwise.
+function D.MergeRecords(old, new)
+  if not (old and new) then return old or new end
+  if lastAt(old) > lastAt(new) then old, new = new, old end
+  -- nothing happened twice: each copy's history is its own days
+  local history = {}
+  for _, copy in ipairs({ new, old }) do
+    for _, h in ipairs(copy.history or {}) do history[#history + 1] = h end
+  end
+  for i, h in ipairs(history) do h.order = i end
+  table.sort(history, function(a, b)
+    if (a.at or 0) ~= (b.at or 0) then return (a.at or 0) > (b.at or 0) end
+    return a.order < b.order
+  end)
+  for _, h in ipairs(history) do h.order = nil end
+  new.history = history
+  -- lists the player made: both copies', the later one's say where they differ
+  for _, set in ipairs({ "stash", "stashKinds", "pins", "toldBags" }) do
+    for k, v in pairs(old[set] or {}) do
+      new[set] = new[set] or {}
+      if new[set][k] == nil then new[set][k] = v end
+    end
+  end
+  local carried = {}
+  for _, want in ipairs(new.carry or {}) do carried[want.id or want] = true end
+  for _, want in ipairs(old.carry or {}) do
+    if not carried[want.id or want] then
+      new.carry = new.carry or {}
+      new.carry[#new.carry + 1] = want
+    end
+  end
+  -- what's carried now, and what's new: only the later copy knows
+  for k, v in pairs(old) do
+    if new[k] == nil then new[k] = v end
+  end
+  return new
+end
+
+D.MIGRATE = {
+  [2] = function(sv)
+    if type(sv.chars) ~= "table" then return end
+    for _, p in ipairs(Core.Character.Pairs(sv.chars)) do
+      sv.chars[p.to] = D.MergeRecords(sv.chars[p.to], sv.chars[p.from])
+      sv.chars[p.from] = nil
+    end
+  end,
+}
+
 -- The suite's plumbing (Core:NewAddon): version checks, DimensionDB with its defaults, the slash command, the minimap
 -- row and the add-on menu. Left-click and /dim open the window; right-click opens settings.
 Core:NewAddon("dimension", {
-  folder = ADDON, api = { 1, 20 }, data = { 1, 4 },
-  db = "DimensionDB", defaults = D.DEFAULTS,
+  folder = ADDON, api = { 1, 34 }, data = { 1, 4 },
+  db = "DimensionDB", defaults = D.DEFAULTS, version = 2, migrate = D.MIGRATE,
   slash = { "/dim", "/dimension" },
   commands = {
     bags = { function()
@@ -175,9 +234,22 @@ end
 local HISTORY_DAYS = 30
 local HISTORY_MAX = 300
 
+local myGuid
+
 local function myKey()
+  if myGuid then return myGuid end
   local name = D.Global("UnitName", "player") or "?"
-  return tostring(D.Global("GetRealmName") or "?") .. "-" .. name
+  local key = Core.Character.Key()
+  -- before the game says who this is: an old-style key, which the GUID takes over once it's known
+  if not key then return "-" .. name end
+  myGuid = key
+  local chars = D.db.chars
+  local from = Core.Character.Mine(chars, name)
+  if from then
+    chars[key] = D.MergeRecords(chars[from], chars[key])
+    chars[from] = nil
+  end
+  return key
 end
 
 ---This character's record: { carry, stash, stashKinds, pins, history }.
